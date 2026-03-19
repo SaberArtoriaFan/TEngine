@@ -226,6 +226,65 @@ namespace GameLogic.Regicide
             slotTransform.position = idle;
         }
 
+        public bool TryGetPlayerHeadWorldPosition(string playerId, out Vector3 worldPosition)
+        {
+            worldPosition = Vector3.zero;
+            if (!_sceneLoaded || !IsBindingsValid() || string.IsNullOrEmpty(playerId))
+            {
+                return false;
+            }
+
+            if (!_playerSlotLookup.TryGetValue(playerId, out int slotIndex))
+            {
+                return false;
+            }
+
+            if (slotIndex < 0 || slotIndex >= MaxPlayerSlots)
+            {
+                return false;
+            }
+
+            Transform actor = _actorRoots[slotIndex] != null ? _actorRoots[slotIndex] : _slotRoots[slotIndex];
+            if (actor == null || !actor.gameObject.activeInHierarchy)
+            {
+                return false;
+            }
+
+            SpriteRenderer renderer = _actorRenderers[slotIndex];
+            if (renderer != null)
+            {
+                Bounds bounds = renderer.bounds;
+                worldPosition = new Vector3(bounds.center.x, bounds.max.y + 0.24f, bounds.center.z);
+            }
+            else
+            {
+                worldPosition = actor.position + new Vector3(0f, 1.1f, 0f);
+            }
+
+            return true;
+        }
+
+        public bool TryGetEnemyHeadWorldPosition(out Vector3 worldPosition)
+        {
+            worldPosition = Vector3.zero;
+            if (!_sceneLoaded || !IsBindingsValid() || _enemyActor == null || !_enemyActor.gameObject.activeInHierarchy)
+            {
+                return false;
+            }
+
+            if (_enemyRenderer != null)
+            {
+                Bounds bounds = _enemyRenderer.bounds;
+                worldPosition = new Vector3(bounds.center.x, bounds.max.y + 0.28f, bounds.center.z);
+            }
+            else
+            {
+                worldPosition = _enemyActor.position + new Vector3(0f, 1.4f, 0f);
+            }
+
+            return true;
+        }
+
         private void CacheBindings()
         {
             _scene = SceneManager.GetSceneByName(SceneName);
