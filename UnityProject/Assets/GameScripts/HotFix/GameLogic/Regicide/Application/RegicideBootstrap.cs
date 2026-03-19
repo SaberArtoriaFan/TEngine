@@ -92,6 +92,7 @@ namespace GameLogic.Regicide
         {
             RegicideNetworkModule.Instance.Active();
             RegicideBattleModule.Instance.Active();
+            RegicideBattlePresentationModule.Instance.Active();
             RegicideBattleModule.Instance.Setup(_runtimeConfig);
         }
 
@@ -115,6 +116,7 @@ namespace GameLogic.Regicide
             bool connected = await RegicideNetworkModule.Instance.ConnectAsync(_runtimeConfig, asHost: _runtimeConfig.StartAsHost);
             if (!connected)
             {
+                RegicideNetworkModule.Instance.Disconnect();
                 _modeSelected = false;
                 Log.Warning("Regicide connect timeout, return to startup mode selection.");
                 GameModule.UI.ShowUIAsync<LoginUI>();
@@ -202,6 +204,11 @@ namespace GameLogic.Regicide
                 RegicideBattleModule.Instance.Release();
             }
 
+            if (RegicideBattlePresentationModule.IsValid)
+            {
+                RegicideBattlePresentationModule.Instance.Release();
+            }
+
             if (RegicideNetworkModule.IsValid)
             {
                 RegicideNetworkModule.Instance.Release();
@@ -210,6 +217,31 @@ namespace GameLogic.Regicide
 
         private static void OnNavigateLobby()
         {
+            NavigateToLobbyAsync().Forget();
+        }
+
+        private static void OnNavigateRoom()
+        {
+            NavigateToRoomAsync().Forget();
+        }
+
+        private static void OnNavigateBattle()
+        {
+            NavigateToBattleAsync().Forget();
+        }
+
+        private static void OnNavigateResult()
+        {
+            NavigateToResultAsync().Forget();
+        }
+
+        private static async UniTaskVoid NavigateToLobbyAsync()
+        {
+            if (RegicideBattlePresentationModule.IsValid)
+            {
+                await RegicideBattlePresentationModule.Instance.ReleaseSceneAsync();
+            }
+
             GameModule.UI.CloseUI<LoginUI>();
             GameModule.UI.CloseUI<RoomUI>();
             GameModule.UI.CloseUI<RegicideBattleUI>();
@@ -217,8 +249,13 @@ namespace GameLogic.Regicide
             GameModule.UI.ShowUIAsync<LobbyUI>();
         }
 
-        private static void OnNavigateRoom()
+        private static async UniTaskVoid NavigateToRoomAsync()
         {
+            if (RegicideBattlePresentationModule.IsValid)
+            {
+                await RegicideBattlePresentationModule.Instance.ReleaseSceneAsync();
+            }
+
             GameModule.UI.CloseUI<LoginUI>();
             GameModule.UI.CloseUI<LobbyUI>();
             GameModule.UI.CloseUI<RegicideBattleUI>();
@@ -226,17 +263,32 @@ namespace GameLogic.Regicide
             GameModule.UI.ShowUIAsync<RoomUI>();
         }
 
-        private static void OnNavigateBattle()
+        private static async UniTaskVoid NavigateToBattleAsync()
         {
             GameModule.UI.CloseUI<LoginUI>();
             GameModule.UI.CloseUI<LobbyUI>();
             GameModule.UI.CloseUI<RoomUI>();
             GameModule.UI.CloseUI<ResultUI>();
+
+            if (RegicideBattlePresentationModule.IsValid)
+            {
+                bool loaded = await RegicideBattlePresentationModule.Instance.EnsureSceneLoadedAsync();
+                if (!loaded)
+                {
+                    Log.Warning("Regicide battle presentation scene load failed, fallback to HUD-only mode.");
+                }
+            }
+
             GameModule.UI.ShowUIAsync<RegicideBattleUI>();
         }
 
-        private static void OnNavigateResult()
+        private static async UniTaskVoid NavigateToResultAsync()
         {
+            if (RegicideBattlePresentationModule.IsValid)
+            {
+                await RegicideBattlePresentationModule.Instance.ReleaseSceneAsync();
+            }
+
             GameModule.UI.CloseUI<LoginUI>();
             GameModule.UI.CloseUI<LobbyUI>();
             GameModule.UI.CloseUI<RoomUI>();

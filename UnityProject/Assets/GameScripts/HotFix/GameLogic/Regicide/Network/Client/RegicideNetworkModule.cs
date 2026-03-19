@@ -354,7 +354,10 @@ namespace GameLogic.Regicide
         {
             TrackInbound(state);
             _connectionState = state ?? new RegicideConnectionState();
-            _connectTcs?.TrySetResult(_connectionState.IsConnected);
+            if (_connectionState.IsConnected)
+            {
+                _connectTcs?.TrySetResult(true);
+            }
             GameEvent.Send(RegicideEventIds.ConnectionStateChanged, _connectionState);
         }
 

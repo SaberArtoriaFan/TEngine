@@ -94,6 +94,11 @@ public class GameModule
     /// 获取弑君者对局模块。
     /// </summary>
     public static RegicideBattleModule RegicideBattle => RegicideBattleModule.Instance;
+
+    /// <summary>
+    /// 获取弑君者战斗表现模块。
+    /// </summary>
+    public static RegicideBattlePresentationModule RegicideBattlePresentation => RegicideBattlePresentationModule.Instance;
     #endregion
 
     /// <summary>
@@ -133,6 +138,11 @@ public class GameModule
         if (RegicideBattleModule.IsValid)
         {
             RegicideBattleModule.Instance.Release();
+        }
+
+        if (RegicideBattlePresentationModule.IsValid)
+        {
+            RegicideBattlePresentationModule.Instance.Release();
         }
 
         if (RegicideAuthorityModule.IsValid)

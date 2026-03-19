@@ -42,8 +42,14 @@ namespace Regicide.Main
             public string Json;
         }
 
+        private struct RegicideKeepAliveMirrorMessage : NetworkMessage
+        {
+            public long Timestamp;
+        }
+
         private const int MaxConnections = 8;
         private const int ActionHistoryLimit = 512;
+        private const float KeepAliveIntervalSeconds = 3f;
 
         [SerializeField] private Transport transport;
         [SerializeField] private bool keepServerAliveWhenNoClient;
@@ -58,6 +64,7 @@ namespace Regicide.Main
         private RegicideErrorPayload _latestError;
         private bool _handlersRegistered;
         private string _localPlayerId = string.Empty;
+        private float _nextKeepAliveAt;
 
         private void Awake()
         {
@@ -121,6 +128,7 @@ namespace Regicide.Main
             NetworkClient.RegisterHandler<RegicideErrorMirrorMessage>(OnClientErrorMessage, false);
 
             NetworkServer.RegisterHandler<RegicideIntentMirrorMessage>(OnServerIntentMessage, false);
+            NetworkServer.RegisterHandler<RegicideKeepAliveMirrorMessage>(OnServerKeepAliveMessage, false);
 
             NetworkClient.OnConnectedEvent += OnClientConnected;
             NetworkClient.OnDisconnectedEvent += OnClientDisconnected;
@@ -143,6 +151,7 @@ namespace Regicide.Main
             NetworkClient.UnregisterHandler<RegicideActionBroadcastMirrorMessage>();
             NetworkClient.UnregisterHandler<RegicideErrorMirrorMessage>();
             NetworkServer.UnregisterHandler<RegicideIntentMirrorMessage>();
+            NetworkServer.UnregisterHandler<RegicideKeepAliveMirrorMessage>();
 
             NetworkClient.OnConnectedEvent -= OnClientConnected;
             NetworkClient.OnDisconnectedEvent -= OnClientDisconnected;
@@ -302,6 +311,10 @@ namespace Regicide.Main
             GameEvent.Send(RegicideBridgeEvents.ServerIntentReceived, payload);
         }
 
+        private static void OnServerKeepAliveMessage(NetworkConnectionToClient _, RegicideKeepAliveMirrorMessage __)
+        {
+        }
+
         private void OnServerPublishRoomSnapshot(RegicideRoomSnapshot room)
         {
             _latestRoom = room;
@@ -444,6 +457,7 @@ namespace Regicide.Main
 
         private void OnClientConnected()
         {
+            _nextKeepAliveAt = Time.unscaledTime + KeepAliveIntervalSeconds;
             PublishConnectionState();
             if (_latestRoom != null && !string.IsNullOrEmpty(_latestRoom.SessionId))
             {
@@ -468,6 +482,7 @@ namespace Regicide.Main
 
         private void OnClientDisconnected()
         {
+            _nextKeepAliveAt = 0f;
             PublishDisconnected();
         }
 
@@ -572,6 +587,25 @@ namespace Regicide.Main
                 Timestamp = RegicideClock.NowUnixMilliseconds(),
             };
             GameEvent.Send(RegicideBridgeEvents.ClientConnected, state);
+        }
+
+        private void Update()
+        {
+            if (!NetworkClient.isConnected)
+            {
+                return;
+            }
+
+            if (Time.unscaledTime < _nextKeepAliveAt)
+            {
+                return;
+            }
+
+            _nextKeepAliveAt = Time.unscaledTime + KeepAliveIntervalSeconds;
+            NetworkClient.Send(new RegicideKeepAliveMirrorMessage
+            {
+                Timestamp = RegicideClock.NowUnixMilliseconds(),
+            });
         }
 
         private static void PublishDisconnected()

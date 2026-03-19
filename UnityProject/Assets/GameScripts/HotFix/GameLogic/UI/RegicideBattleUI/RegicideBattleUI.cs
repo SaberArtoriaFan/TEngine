@@ -29,6 +29,15 @@ namespace GameLogic
             public int CardIndex;
         }
 
+        private sealed class PlayedCardView
+        {
+            public GameObject Root;
+            public RectTransform Rect;
+            public Image Background;
+            public Text Title;
+            public Text Desc;
+        }
+
         private Button _btnPlay;
         private Button _btnPass;
         private Button _btnDefend;
@@ -50,9 +59,12 @@ namespace GameLogic
         private Text _txtBattleLog;
         private Text _txtHelpContent;
         private Text _txtStageFx;
+        private Text _txtRoundInfo;
 
         private RectTransform _rectHandArea;
+        private RectTransform _rectPlayedCardsArea;
         private ScrollRect _scrollBattleLog;
+        private GameObject _playedCardTemplate;
 
         private GameObject _helpMask;
         private bool _actionProcessing;
@@ -60,18 +72,25 @@ namespace GameLogic
         private bool _playingFxQueue;
         private bool _pendingAutoScroll;
         private bool _templateMissingLogged;
+        private bool _playedCardTemplateMissingLogged;
+        private bool _playingActionFxQueue;
 
         private readonly List<int> _selectedCardIndices = new List<int>();
         private readonly List<CardView> _cardViews = new List<CardView>();
+        private readonly List<PlayedCardView> _playedCardViews = new List<PlayedCardView>();
+        private readonly List<string> _visiblePlayedCards = new List<string>();
         private readonly Queue<string> _pendingFxQueue = new Queue<string>();
+        private readonly Queue<RegicideActionBroadcastPayload> _pendingActionFxQueue = new Queue<RegicideActionBroadcastPayload>();
 
         private int _selectedNextPlayerIndex = -1;
         private int _knownLogCount;
         private int _lastRenderedLogCount = -1;
         private int _lastRenderedActionCount = -1;
+        private int _playedCardsVersion;
         private string _knownSessionId = string.Empty;
         private string _feedback = string.Empty;
         private string _lastRenderedFeedback = string.Empty;
+        private long _lastQueuedActionSequence;
 
         protected override void ScriptGenerator()
         {
@@ -96,9 +115,12 @@ namespace GameLogic
             _txtBattleLog = FindComponentByName<Text>("m_txtBattle");
             _txtHelpContent = FindComponentByName<Text>("m_txtHelpContent");
             _txtStageFx = FindComponentByName<Text>("m_txtStageFx");
+            _txtRoundInfo = FindComponentByName<Text>("m_txtRoundInfo");
 
             _rectHandArea = FindComponentByName<RectTransform>("m_rectHandArea");
+            _rectPlayedCardsArea = FindComponentByName<RectTransform>("m_rectPlayedCardsArea");
             _scrollBattleLog = FindComponentByName<ScrollRect>("m_scrollBattleLog");
+            _playedCardTemplate = FindTransformByName("m_goPlayedCardTemplate")?.gameObject;
 
             Transform helpMask = FindTransformByName("m_goHelpMask");
             _helpMask = helpMask != null ? helpMask.gameObject : null;
@@ -123,6 +145,11 @@ namespace GameLogic
             if (_cardTemplateButton != null)
             {
                 _cardTemplateButton.gameObject.SetActive(false);
+            }
+
+            if (_playedCardTemplate != null)
+            {
+                _playedCardTemplate.SetActive(false);
             }
 
             if (_helpMask != null)
@@ -150,7 +177,7 @@ namespace GameLogic
             if (_btnHelpClose != null) _btnHelpClose.onClick.AddListener(OnHelpCloseClicked);
         }
 
-        protected override void OnCreate()
+protected override void OnCreate()
         {
             if (_txtPlayLabel != null) _txtPlayLabel.text = "出牌";
             if (_txtPassLabel != null) _txtPassLabel.text = "跳过";
@@ -169,10 +196,16 @@ namespace GameLogic
             _playingFxQueue = false;
             _pendingAutoScroll = false;
             _pendingFxQueue.Clear();
+            _pendingActionFxQueue.Clear();
+            _visiblePlayedCards.Clear();
             _navigatingResult = false;
+            _playingActionFxQueue = false;
             _selectedCardIndices.Clear();
             _selectedNextPlayerIndex = -1;
+            _playedCardsVersion = 0;
+            _lastQueuedActionSequence = 0;
             HideStageFx();
+            RenderPlayedCardsPanel();
             RefreshBattleView();
         }
 
@@ -182,10 +215,23 @@ namespace GameLogic
 
         private void OnActionBroadcastReceived(RegicideActionBroadcastPayload payload)
         {
-            if (payload != null && !string.IsNullOrEmpty(payload.Summary) && !string.Equals(payload.ActorPlayerId, GameModule.RegicideBattle.LocalPlayerId))
+            if (payload == null)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(payload.Summary) && !string.Equals(payload.ActorPlayerId, GameModule.RegicideBattle.LocalPlayerId))
             {
                 _feedback = payload.Summary;
             }
+
+            if (payload.ServerSequence > _lastQueuedActionSequence)
+            {
+                _lastQueuedActionSequence = payload.ServerSequence;
+                _pendingActionFxQueue.Enqueue(payload);
+                PlayActionFxQueueAsync().Forget();
+            }
+
             RefreshBattleView();
         }
 
@@ -238,6 +284,7 @@ namespace GameLogic
             RegicideBattleState state = GameModule.RegicideBattle.State;
             RegicidePlayerState player = GameModule.RegicideBattle.GetLocalPlayerState();
             if (state == null || player == null) return;
+            List<string> playedCards = BuildCardDisplayList(player, _selectedCardIndices);
 
             RegicideAvailableActionSnapshot actions = GameModule.RegicideBattle.GetAvailableActionSnapshot(_selectedCardIndices, _selectedNextPlayerIndex);
             if (!actions.IsCurrentSelectionPlayable)
@@ -260,6 +307,11 @@ namespace GameLogic
             {
                 _selectedCardIndices.Clear();
                 _selectedNextPlayerIndex = -1;
+                if (state.Players != null && state.Players.Count <= 1)
+                {
+                    ShowPlayedCards(playedCards);
+                    AnimatePlayerDashAsync(GameModule.RegicideBattle.LocalPlayerId).Forget();
+                }
             }
 
             RefreshBattleView();
@@ -302,6 +354,8 @@ namespace GameLogic
             if (_actionProcessing) return;
             RegicideBattleState state = GameModule.RegicideBattle.State;
             if (state == null) return;
+            RegicidePlayerState localPlayer = GameModule.RegicideBattle.GetLocalPlayerState();
+            List<string> discardedCards = BuildCardDisplayList(localPlayer, _selectedCardIndices);
 
             RegicideAvailableActionSnapshot actions = GameModule.RegicideBattle.GetAvailableActionSnapshot(_selectedCardIndices, _selectedNextPlayerIndex);
             if (!actions.IsAwaitingDiscard) return;
@@ -324,6 +378,11 @@ namespace GameLogic
             else
             {
                 _selectedCardIndices.Clear();
+                if (state.Players != null && state.Players.Count <= 1)
+                {
+                    ShowPlayedCards(discardedCards);
+                    AnimateBossCounterAsync().Forget();
+                }
             }
 
             RefreshBattleView();
@@ -373,8 +432,10 @@ namespace GameLogic
             RenderEnemyPanel(state);
             RenderPlayerPanel(state, player, actions);
             RenderOtherPlayersPanel(state);
+            RenderPlayedCardsPanel();
             RenderCardPanel(player, actions);
             RenderBattleLog(state);
+            GameModule.RegicideBattlePresentation.SyncBattleState(state, GameModule.RegicideBattle.PublicStateSnapshot, GameModule.RegicideBattle.LocalPlayerId);
             RefreshActionButtons(GameModule.RegicideBattle.IsMyTurn);
 
             if (state != null && state.IsGameOver && !_navigatingResult)
@@ -384,8 +445,13 @@ namespace GameLogic
             }
         }
 
-        private void RenderEnemyPanel(RegicideBattleState state)
+private void RenderEnemyPanel(RegicideBattleState state)
         {
+            if (_txtRoundInfo != null)
+            {
+                _txtRoundInfo.text = state == null ? "战斗准备中..." : $"第 {Mathf.Max(1, state.Round)} 回合";
+            }
+
             if (_txtEnemyInfo == null) return;
             if (state == null || state.CurrentEnemy == null)
             {
@@ -394,14 +460,14 @@ namespace GameLogic
             }
 
             RegicideEnemyState enemy = state.CurrentEnemy;
-            int remain = state.RemainingEnemies != null ? state.RemainingEnemies.Count : 0;
-            string immunity = state.IsEnemyImmunityDisabledByJester ? "已取消" : GetSuitDisplay(enemy.Suit);
+            string immunity = state.IsEnemyImmunityDisabledByJester ? "无" : GetSuitDisplay(enemy.Suit);
             _txtEnemyInfo.text =
-                $"当前敌人：{enemy.Name}\n" +
-                $"生命：{Mathf.Max(0, enemy.Health)}    攻击：{Mathf.Max(0, enemy.Attack)}    花色免疫：{immunity}    剩余敌人：{remain}";
+                $"{enemy.Name}\n" +
+                $"攻击：{Mathf.Max(0, enemy.Attack)}   生命：{Mathf.Max(0, enemy.Health)}   花色：{GetSuitDisplay(enemy.Suit)}\n" +
+                $"花色免疫：{immunity}";
         }
 
-        private void RenderPlayerPanel(RegicideBattleState state, RegicidePlayerState player, RegicideAvailableActionSnapshot actions)
+private void RenderPlayerPanel(RegicideBattleState state, RegicidePlayerState player, RegicideAvailableActionSnapshot actions)
         {
             if (_txtPlayerInfo != null)
             {
@@ -412,9 +478,8 @@ namespace GameLogic
                 else
                 {
                     _txtPlayerInfo.text =
-                        $"玩家：{player.PlayerId}\n" +
-                        $"手牌：{player.Hand.Count}/{Mathf.Max(1, state.HandLimitPerPlayer)}    牌库：{state.DrawPile.Count}    弃牌堆：{state.DiscardPile.Count}\n" +
-                        $"回合：第{Mathf.Max(1, state.Round)}轮   行动序号：{state.AppliedSequence}";
+                        $"{player.PlayerId}（你）\n" +
+                        $"手牌：{player.Hand.Count}/{Mathf.Max(1, state.HandLimitPerPlayer)}";
                 }
             }
 
@@ -469,7 +534,7 @@ namespace GameLogic
             if (_txtPassLabel != null) _txtPassLabel.text = actions != null && actions.IsAwaitingDiscard ? "跳过(承伤中)" : "跳过";
         }
 
-        private void RenderSelectionPanel(RegicideBattleState state, RegicidePlayerState player, RegicideAvailableActionSnapshot actions)
+private void RenderSelectionPanel(RegicideBattleState state, RegicidePlayerState player, RegicideAvailableActionSnapshot actions)
         {
             if (_txtSelectedCard == null)
             {
@@ -494,7 +559,7 @@ namespace GameLogic
                         continue;
                     }
 
-                    if (picked > 0) discardBuilder.Append(" + ");
+                    if (picked > 0) discardBuilder.Append(" + " );
                     discardBuilder.Append(GetCardDisplay(player.Hand[index]));
                     picked++;
                 }
@@ -521,7 +586,7 @@ namespace GameLogic
                     continue;
                 }
 
-                if (cardCount > 0) selectedBuilder.Append(" + ");
+                if (cardCount > 0) selectedBuilder.Append(" + " );
                 selectedBuilder.Append(GetCardDisplay(player.Hand[index]));
                 cardCount++;
             }
@@ -549,62 +614,210 @@ namespace GameLogic
             }
         }
 
-        private void RenderOtherPlayersPanel(RegicideBattleState state)
+private void RenderOtherPlayersPanel(RegicideBattleState state)
         {
-            if (_txtOtherPlayers == null) return;
-
-            IReadOnlyList<RegicidePublicPlayerState> others = GameModule.RegicideBattle.GetOtherPlayersPublicStates();
-            if (others == null || others.Count <= 0)
+            if (_txtOtherPlayers == null)
             {
-                if (state == null || state.Players == null || state.Players.Count <= 1)
-                {
-                    _txtOtherPlayers.text = "队友状态：单人模式或暂无其他玩家。";
-                    return;
-                }
+                return;
+            }
 
-                StringBuilder fallback = new StringBuilder(128);
-                fallback.AppendLine("队友状态：");
-                for (int i = 0; i < state.Players.Count; i++)
+            StringBuilder builder = new StringBuilder(320);
+            builder.AppendLine("队友状态：");
+            bool hasAny = false;
+            string localPlayerId = GameModule.RegicideBattle.LocalPlayerId;
+            RegicidePublicStateSnapshotPayload snapshot = GameModule.RegicideBattle.PublicStateSnapshot;
+
+            if (snapshot?.Players != null && snapshot.Players.Count > 0)
+            {
+                for (int i = 0; i < snapshot.Players.Count; i++)
                 {
-                    RegicidePlayerState teamMate = state.Players[i];
-                    if (teamMate == null || string.Equals(teamMate.PlayerId, GameModule.RegicideBattle.LocalPlayerId))
+                    RegicidePublicPlayerState player = snapshot.Players[i];
+                    if (player == null || string.IsNullOrEmpty(player.PlayerId))
                     {
                         continue;
                     }
 
-                    bool isCurrent = i == state.CurrentPlayerIndex;
-                    bool pendingDiscard = state.IsAwaitingDiscard && i == state.PendingDiscardTargetPlayerIndex;
-                    fallback.Append('[').Append(i + 1).Append("] ")
-                        .Append(teamMate.PlayerId)
-                        .Append(" 手牌:").Append(teamMate.Hand != null ? teamMate.Hand.Count : 0)
-                        .Append(" 状态:")
-                        .Append(pendingDiscard ? "承伤中" : isCurrent ? "行动中" : "等待中")
-                        .AppendLine();
+                    bool isLocal = string.Equals(player.PlayerId, localPlayerId);
+                    string localTag = isLocal ? "（你）" : string.Empty;
+                    string onlineTag = player.IsOnline ? "在线" : "离线";
+                    builder.Append($"[{Mathf.Max(1, player.SeatIndex + 1)}] {player.PlayerId}{localTag}  手牌x{Mathf.Max(0, player.HandCount)}  {FormatPublicPhase(player.Phase)}  {onlineTag}");
+                    if (player.IsCurrentTurn) builder.Append("  当前行动");
+                    else if (player.IsPendingDiscardTarget) builder.Append("  等待承伤");
+                    builder.AppendLine();
+                    hasAny = true;
                 }
+            }
+            else if (state?.Players != null && state.Players.Count > 0)
+            {
+                for (int i = 0; i < state.Players.Count; i++)
+                {
+                    RegicidePlayerState player = state.Players[i];
+                    if (player == null || string.IsNullOrEmpty(player.PlayerId))
+                    {
+                        continue;
+                    }
 
-                _txtOtherPlayers.text = fallback.ToString().TrimEnd();
+                    bool isLocal = string.Equals(player.PlayerId, localPlayerId);
+                    string localTag = isLocal ? "（你）" : string.Empty;
+                    string phase = state.IsAwaitingDiscard && i == state.PendingDiscardTargetPlayerIndex
+                        ? "Discarding"
+                        : (i == state.CurrentPlayerIndex ? "Acting" : "WaitingTurn");
+                    builder.Append($"[{i + 1}] {player.PlayerId}{localTag}  手牌x{player.Hand?.Count ?? 0}  {FormatPublicPhase(phase)}");
+                    builder.AppendLine();
+                    hasAny = true;
+                }
+            }
+
+            if (!hasAny)
+            {
+                builder.Append("暂无其他玩家状态。");
+            }
+
+            _txtOtherPlayers.text = builder.ToString();
+        }
+
+        private void RenderPlayedCardsPanel()
+        {
+            int count = _visiblePlayedCards.Count;
+            EnsurePlayedCardViewCount(count);
+            if (_playedCardViews.Count < count)
+            {
+                count = _playedCardViews.Count;
+            }
+
+            if (count <= 0)
+            {
                 return;
             }
 
-            StringBuilder builder = new StringBuilder(256);
-            builder.AppendLine("队友状态：");
-            for (int i = 0; i < others.Count; i++)
+            float cardWidth = 156f;
+            float spacing = 24f;
+            float totalWidth = cardWidth * count + spacing * (count - 1);
+            float startX = -totalWidth * 0.5f + cardWidth * 0.5f;
+
+            for (int i = 0; i < count; i++)
             {
-                RegicidePublicPlayerState player = others[i];
-                if (player == null) continue;
+                PlayedCardView view = _playedCardViews[i];
+                if (view == null || view.Root == null || view.Rect == null) continue;
 
-                builder.Append('[').Append(player.SeatIndex + 1).Append("] ")
-                    .Append(player.PlayerId)
-                    .Append(player.IsOnline ? " 在线" : " 离线")
-                    .Append(" 手牌:").Append(Mathf.Max(0, player.HandCount))
-                    .Append(" 状态:").Append(FormatPublicPhase(player.Phase));
+                string cardText = _visiblePlayedCards[i];
+                view.Root.SetActive(true);
+                SetRect(view.Rect,
+                    new Vector2(0.5f, 0.5f),
+                    new Vector2(0.5f, 0.5f),
+                    new Vector2(0.5f, 0.5f),
+                    new Vector2(startX + i * (cardWidth + spacing), 0f),
+                    new Vector2(156f, 210f));
 
-                if (player.IsCurrentTurn) builder.Append(" <行动中>");
-                if (player.IsPendingDiscardTarget) builder.Append(" <承伤>");
-                builder.AppendLine();
+                if (view.Title != null)
+                {
+                    view.Title.text = cardText;
+                }
+
+                if (view.Desc != null)
+                {
+                    view.Desc.text = "鏈鎵撳嚭";
+                }
+
+                if (view.Background != null)
+                {
+                    view.Background.color = new Color(0.2f + 0.06f * (i % 3), 0.24f, 0.32f, 0.94f);
+                }
+            }
+        }
+
+        private void EnsurePlayedCardViewCount(int count)
+        {
+            if (_rectPlayedCardsArea == null || _playedCardTemplate == null)
+            {
+                if (!_playedCardTemplateMissingLogged)
+                {
+                    Debug.LogWarning("RegicideBattleUI: 明牌模板未绑定，已跳过明牌展示。");
+                    _playedCardTemplateMissingLogged = true;
+                }
+                return;
             }
 
-            _txtOtherPlayers.text = builder.ToString().TrimEnd();
+            _playedCardTemplateMissingLogged = false;
+            while (_playedCardViews.Count < count)
+            {
+                int slot = _playedCardViews.Count;
+                GameObject cardGo = UnityEngine.Object.Instantiate(_playedCardTemplate, _rectPlayedCardsArea, false);
+                cardGo.name = $"m_goPlayedCard_{slot}";
+                cardGo.SetActive(true);
+
+                PlayedCardView view = new PlayedCardView
+                {
+                    Root = cardGo,
+                    Rect = cardGo.GetComponent<RectTransform>(),
+                    Background = cardGo.GetComponent<Image>(),
+                    Title = cardGo.transform.Find("m_txtPlayedCardTitle")?.GetComponent<Text>(),
+                    Desc = cardGo.transform.Find("m_txtPlayedCardDesc")?.GetComponent<Text>(),
+                };
+
+                _playedCardViews.Add(view);
+            }
+
+            for (int i = 0; i < _playedCardViews.Count; i++)
+            {
+                if (_playedCardViews[i].Root != null)
+                {
+                    _playedCardViews[i].Root.SetActive(i < count);
+                }
+            }
+        }
+
+        private void ShowPlayedCards(IList<string> cards)
+        {
+            _visiblePlayedCards.Clear();
+            if (cards != null)
+            {
+                for (int i = 0; i < cards.Count; i++)
+                {
+                    if (!string.IsNullOrEmpty(cards[i]))
+                    {
+                        _visiblePlayedCards.Add(cards[i]);
+                    }
+                }
+            }
+
+            _playedCardsVersion++;
+            RenderPlayedCardsPanel();
+            HidePlayedCardsLaterAsync(_playedCardsVersion).Forget();
+        }
+
+        private async UniTaskVoid HidePlayedCardsLaterAsync(int version)
+        {
+            await UniTask.Delay(1400);
+            if (version != _playedCardsVersion)
+            {
+                return;
+            }
+
+            _visiblePlayedCards.Clear();
+            RenderPlayedCardsPanel();
+        }
+
+        private static List<string> BuildCardDisplayList(RegicidePlayerState player, IList<int> cardIndices)
+        {
+            List<string> result = new List<string>();
+            if (player?.Hand == null || cardIndices == null || cardIndices.Count <= 0)
+            {
+                return result;
+            }
+
+            for (int i = 0; i < cardIndices.Count; i++)
+            {
+                int index = cardIndices[i];
+                if (index < 0 || index >= player.Hand.Count)
+                {
+                    continue;
+                }
+
+                result.Add(GetCardDisplay(player.Hand[index]));
+            }
+
+            return result;
         }
 
         private string GetCurrentTurnPlayerDisplay(RegicideBattleState state)
@@ -656,10 +869,12 @@ namespace GameLogic
                 _selectedCardIndices.AddRange(actions.SelectedCardIndices);
             }
 
-            float rowWidth = _rectHandArea != null ? _rectHandArea.rect.width - 48f : 900f;
-            float spacing = count <= 1 ? CardWidth : Mathf.Clamp((rowWidth - CardWidth) / (count - 1), CardMinSpacing, CardMaxSpacing);
-            float totalWidth = count <= 1 ? CardWidth : CardWidth + spacing * (count - 1);
-            float startX = -totalWidth * 0.5f + CardWidth * 0.5f;
+            float rowWidth = _rectHandArea != null ? _rectHandArea.rect.width - 80f : 1100f;
+            float maxSpread = Mathf.Max(420f, Mathf.Min(rowWidth, 1020f));
+            float spread = count <= 1 ? 0f : maxSpread;
+            float angleRange = Mathf.Lerp(16f, 46f, Mathf.Clamp01((count - 1) / 7f));
+            float baseY = 10f;
+            float lift = Mathf.Lerp(16f, 56f, Mathf.Clamp01(count / 10f));
 
             for (int i = 0; i < count; i++)
             {
@@ -667,10 +882,17 @@ namespace GameLogic
                 RegicideCard card = player.Hand[i];
                 bool playable = actions != null && actions.PlayableCardIndices.Contains(i);
                 bool selected = _selectedCardIndices.Contains(i);
+                float t = count <= 1 ? 0f : i / (count - 1f);
+                float centered = t - 0.5f;
+                float x = spread * centered;
+                float arc = 1f - Mathf.Abs(centered) * 2f;
+                float y = baseY + arc * lift + (selected ? 34f : 0f);
+                float angle = -centered * 2f * angleRange;
 
                 view.CardIndex = i;
                 view.Root.SetActive(true);
-                SetRect(view.Rect, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(startX + spacing * i, selected ? 34f : 14f), new Vector2(CardWidth, CardHeight));
+                SetRect(view.Rect, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(x, y), new Vector2(CardWidth, CardHeight));
+                view.Rect.localEulerAngles = new Vector3(0f, 0f, angle);
                 if (view.Button != null) view.Button.interactable = playable && !_actionProcessing && GameModule.RegicideBattle.IsMyTurn;
                 if (view.Background != null) view.Background.color = BuildCardColor(card.Suit, selected, playable);
                 if (view.Title != null) view.Title.text = $"{GetCardDisplay(card)}\n点数 {card.AttackValue}";
@@ -678,7 +900,7 @@ namespace GameLogic
             }
         }
 
-        private void RenderBattleLog(RegicideBattleState state)
+private void RenderBattleLog(RegicideBattleState state)
         {
             if (_txtBattleLog == null) return;
 
@@ -699,14 +921,14 @@ namespace GameLogic
                     RegicideActionBroadcastPayload action = actions[i];
                     if (action == null) continue;
 
-                    builder.Append("• #").Append(action.ServerSequence)
+                    builder.Append("- #").Append(action.ServerSequence)
                         .Append(' ').Append(string.IsNullOrEmpty(action.ActorPlayerId) ? "未知玩家" : action.ActorPlayerId)
                         .Append(' ').Append(FormatActionType(action.ActionType))
-                        .Append(" 牌:").Append(FormatActionCards(action.PublicCards));
+                        .Append(" 牌 " ).Append(FormatActionCards(action.PublicCards));
 
                     if (!string.IsNullOrEmpty(action.Summary))
                     {
-                        builder.Append(" -> ").Append(action.Summary);
+                        builder.Append(" -> " ).Append(action.Summary);
                     }
 
                     builder.Append('\n');
@@ -725,7 +947,7 @@ namespace GameLogic
             {
                 for (int i = 0; i < logCount; i++)
                 {
-                    builder.Append("• ").Append(state.BattleLog[i]).Append('\n');
+                    builder.Append("- " ).Append(state.BattleLog[i]).Append('\n');
                 }
             }
 
@@ -741,13 +963,13 @@ namespace GameLogic
             }
         }
 
-        private static string FormatActionType(RegicideActionBroadcastType type)
+private static string FormatActionType(RegicideActionBroadcastType type)
         {
             switch (type)
             {
                 case RegicideActionBroadcastType.PlayCard: return "出牌";
                 case RegicideActionBroadcastType.Pass: return "跳过";
-                case RegicideActionBroadcastType.DiscardForDamage: return "承伤弃牌";
+                case RegicideActionBroadcastType.DiscardForDamage: return "弃牌承伤";
                 case RegicideActionBroadcastType.StartMatch: return "开局";
                 default: return "动作";
             }
@@ -789,7 +1011,7 @@ namespace GameLogic
             }
         }
 
-        private void EnsureCardViewCount(int count)
+private void EnsureCardViewCount(int count)
         {
             if (_rectHandArea == null || _cardTemplateButton == null)
             {
@@ -860,8 +1082,12 @@ namespace GameLogic
                 _feedback = string.Empty;
                 _playingFxQueue = false;
                 _pendingFxQueue.Clear();
+                _pendingActionFxQueue.Clear();
+                _visiblePlayedCards.Clear();
+                _playedCardsVersion++;
                 HideStageFx();
                 _navigatingResult = false;
+                RenderPlayedCardsPanel();
             }
 
             if (state.BattleLog == null) return;
@@ -881,13 +1107,98 @@ namespace GameLogic
             }
         }
 
-        private string BuildStageFxText(string logLine)
+        private async UniTaskVoid PlayActionFxQueueAsync()
+        {
+            if (_playingActionFxQueue) return;
+            _playingActionFxQueue = true;
+
+            try
+            {
+                while (_pendingActionFxQueue.Count > 0)
+                {
+                    RegicideActionBroadcastPayload payload = _pendingActionFxQueue.Dequeue();
+                    if (payload == null) continue;
+
+                    if (payload.PublicCards != null && payload.PublicCards.Count > 0)
+                    {
+                        ShowPlayedCards(payload.PublicCards);
+                    }
+
+                    switch (payload.ActionType)
+                    {
+                        case RegicideActionBroadcastType.PlayCard:
+                            await AnimatePlayerAttackSequenceAsync(payload);
+                            break;
+                        case RegicideActionBroadcastType.DiscardForDamage:
+                            await AnimateBossCounterSequenceAsync(payload);
+                            break;
+                    }
+
+                    await UniTask.Delay(60);
+                }
+            }
+            finally
+            {
+                _playingActionFxQueue = false;
+            }
+        }
+
+        private async UniTask AnimatePlayerAttackSequenceAsync(RegicideActionBroadcastPayload payload)
+        {
+            if (payload == null)
+            {
+                return;
+            }
+
+            await AnimatePlayerDashAsync(payload.ActorPlayerId);
+            await AnimateEnemyHitAsync();
+
+            bool enemyDefeated = payload.EnemyHealthBefore > 0 && payload.EnemyHealthAfter == 0;
+            if (enemyDefeated)
+            {
+                await AnimateEnemyDeathAsync();
+            }
+        }
+
+        private async UniTask AnimateBossCounterSequenceAsync(RegicideActionBroadcastPayload payload)
+        {
+            await AnimateBossCounterAsync();
+            await AnimatePlayerHitAsync(payload?.ActorPlayerId);
+        }
+
+        private async UniTask AnimatePlayerDashAsync(string playerId)
+        {
+            await GameModule.RegicideBattlePresentation.PlayPlayerAttackAsync(playerId);
+        }
+
+        private async UniTask AnimateBossCounterAsync()
+        {
+            await GameModule.RegicideBattlePresentation.PlayEnemyCounterAsync();
+        }
+
+        private async UniTask AnimateEnemyHitAsync()
+        {
+            await GameModule.RegicideBattlePresentation.PlayEnemyHitAsync();
+        }
+
+        private async UniTask AnimateEnemyDeathAsync()
+        {
+            await GameModule.RegicideBattlePresentation.PlayEnemyDefeatAsync();
+        }
+
+        private async UniTask AnimatePlayerHitAsync(string playerId)
+        {
+            await GameModule.RegicideBattlePresentation.PlayPlayerHitAsync(playerId);
+        }
+
+
+private string BuildStageFxText(string logLine)
         {
             if (string.IsNullOrEmpty(logLine)) return string.Empty;
             if (logLine.Contains("摸牌") || logLine.Contains("Draw")) return "补牌中...";
-            if (logLine.Contains("反击") || logLine.Contains("Counter")) return "敌人反击！";
-            if (logLine.Contains("敌人登场") || logLine.Contains("新的敌人") || logLine.Contains("Enemy")) return "敌人切换！";
-            if (logLine.Contains("承伤弃牌") || logLine.Contains("Discard")) return "承伤结算...";
+            if (logLine.Contains("反击") || logLine.Contains("Counter")) return "敌人反击...";
+            if (logLine.Contains("敌人登场") || logLine.Contains("新的敌人") || logLine.Contains("Enemy")) return "敌人切换...";
+            if (logLine.Contains("承伤弃牌") || logLine.Contains("Discard")) return "承伤结算中...";
             return string.Empty;
         }
 
@@ -939,13 +1250,13 @@ namespace GameLogic
             GameEvent.Send(RegicideEventIds.UiNavigateResult);
         }
 
-        private string BuildHelpContent()
+private string BuildHelpContent()
         {
             StringBuilder builder = new StringBuilder(640);
             builder.AppendLine("目标：击败全部敌人。");
             builder.AppendLine("出牌：可单出，也可同点数组合（总点数 <= 10）。");
-            builder.AppendLine("A（1点）：可单出，或与另一张牌配对，形成 +1 并结算双方花色。");
-            builder.AppendLine("小丑：只能单独打出，取消敌人花色免疫，本回合跳过伤害与承伤，并指定下位行动者。");
+            builder.AppendLine("A（1点）：可单出，或与另一张牌配对，额外+1并结算双花色。");
+            builder.AppendLine("小丑：只能单独打出，取消敌人花色免疫，本回合跳过伤害与承伤，并指定下一位行动者。");
             builder.AppendLine("敌人未死会反击：当前玩家必须弃牌承伤，弃牌总点数至少等于敌人攻击，否则全队失败。");
             builder.AppendLine();
             builder.AppendLine("花色效果：");
@@ -996,13 +1307,13 @@ namespace GameLogic
             rect.sizeDelta = sizeDelta;
         }
 
-        private static string GetCardDisplay(RegicideCard card)
+private static string GetCardDisplay(RegicideCard card)
         {
             if (card == null) return "空牌";
             return $"{GetSuitDisplay(card.Suit)}{GetRankDisplay(card.Rank)}";
         }
 
-        private static string DescribeCardEffect(RegicideCard card)
+private static string DescribeCardEffect(RegicideCard card)
         {
             if (card == null) return "无效果。";
             if (card.IsJester) return "取消当前敌人花色免疫；本回合跳过伤害与承伤；指定下一位行动者。";
@@ -1010,14 +1321,14 @@ namespace GameLogic
             switch (card.Suit)
             {
                 case RegicideSuit.Spade: return $"点数 {card.AttackValue}：敌人攻击 -{card.AttackValue}";
-                case RegicideSuit.Heart: return $"点数 {card.AttackValue}：回收弃牌 {card.AttackValue} 张";
+                case RegicideSuit.Heart: return $"点数 {card.AttackValue}：回收弃牌到牌库（最多 {card.AttackValue} 张）";
                 case RegicideSuit.Club: return $"点数 {card.AttackValue}：本次伤害翻倍";
                 case RegicideSuit.Diamond: return $"点数 {card.AttackValue}：摸牌 {card.AttackValue} 张";
                 default: return $"点数 {card.AttackValue}：基础伤害";
             }
         }
 
-        private static string FormatPublicPhase(string phase)
+private static string FormatPublicPhase(string phase)
         {
             switch (phase)
             {
@@ -1032,12 +1343,12 @@ namespace GameLogic
             }
         }
 
-        private static string GetSuitDisplay(RegicideSuit suit)
+private static string GetSuitDisplay(RegicideSuit suit)
         {
             switch (suit)
             {
                 case RegicideSuit.Spade: return "黑桃";
-                case RegicideSuit.Heart: return "红桃";
+                case RegicideSuit.Heart: return "红心";
                 case RegicideSuit.Club: return "梅花";
                 case RegicideSuit.Diamond: return "方块";
                 case RegicideSuit.Joker: return "小丑";
