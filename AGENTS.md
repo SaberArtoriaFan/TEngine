@@ -15,6 +15,7 @@ TEngine 基于 HybridCLR + YooAsset + UniTask + Luban 构建。
 6. **禁止改 Runtime**：不允许在 `Assets/TEngine/Runtime` 新增或修改项目业务代码
 7. **底层解耦位置**：底层共享契约/协议/DTO 放在 `Assets/GameScripts/HotFix/GameProto`，且不依赖其他自定义程序集
 8. **网络分层**：客户端与服务端代码必须明确区分（命名、目录、模块职责均需可识别）
+9. **UI 布局规范**：UI 控件的锚点/位置/尺寸/层级必须实装在 Prefab；代码仅允许做 `GetComponent` 绑定与动态状态刷新，禁止硬编码静态布局参数
 
 ## 程序集分层
 

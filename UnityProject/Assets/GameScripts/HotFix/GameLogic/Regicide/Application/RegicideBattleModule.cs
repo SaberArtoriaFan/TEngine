@@ -392,6 +392,7 @@ namespace GameLogic.Regicide
                 IsGameOver = _state.IsGameOver,
                 IsVictory = _state.IsVictory,
                 CurrentPlayerIndex = _state.CurrentPlayerIndex,
+                Seed = _state.Seed,
                 StateHash = RegicideStateHasher.ComputeHash(_state),
                 StateJson = JsonUtility.ToJson(_state),
                 Timestamp = RegicideClock.NowUnixMilliseconds(),
@@ -419,6 +420,14 @@ namespace GameLogic.Regicide
             if (remoteState != null)
             {
                 _state = remoteState;
+                if (_runtimeConfig != null && remoteState.Seed > 0)
+                {
+                    _runtimeConfig.RandomSeed = remoteState.Seed;
+                }
+                else if (_runtimeConfig != null && payload.Seed > 0)
+                {
+                    _runtimeConfig.RandomSeed = payload.Seed;
+                }
             }
         }
 
@@ -440,6 +449,11 @@ namespace GameLogic.Regicide
             }
 
             _publicStateSnapshot = payload;
+            if (_runtimeConfig != null && payload.Seed > 0)
+            {
+                _runtimeConfig.RandomSeed = payload.Seed;
+            }
+
             if (_latestActionSequence < payload.ServerSequence)
             {
                 _latestActionSequence = payload.ServerSequence;

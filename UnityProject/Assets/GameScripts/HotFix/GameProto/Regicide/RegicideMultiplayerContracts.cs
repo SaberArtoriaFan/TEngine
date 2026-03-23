@@ -34,6 +34,7 @@ namespace GameProto.Regicide
         public int CurrentPlayerIndex = -1;
         public bool IsAwaitingDiscard;
         public int PendingDiscardTargetPlayerIndex = -1;
+        public int Seed;
         public List<RegicidePublicPlayerState> Players = new List<RegicidePublicPlayerState>();
         public long Timestamp;
     }
@@ -47,6 +48,9 @@ namespace GameProto.Regicide
         public RegicideActionBroadcastType ActionType = RegicideActionBroadcastType.Unknown;
         public List<string> PublicCards = new List<string>();
         public string Summary = string.Empty;
+        public bool EnemyDefeated;
+        public int EnemyBeforeId = -1;
+        public int EnemyAfterId = -1;
         public int EnemyHealthBefore = -1;
         public int EnemyHealthAfter = -1;
         public int EnemyAttackBefore = -1;

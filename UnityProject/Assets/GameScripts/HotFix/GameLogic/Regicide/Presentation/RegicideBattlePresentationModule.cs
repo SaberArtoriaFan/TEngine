@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using DG.Tweening;
@@ -25,6 +25,11 @@ namespace GameLogic.Regicide
         private const string PlayerActionPointName = "PlayerActionPoint";
         private const string BossAttackPointName = "BossAttackPoint";
         private const string EnemyHitPointName = "EnemyHitPoint";
+        private const string BattleCameraName = "RegicideBattleCamera";
+        private const string LightBanditControllerPath = "Assets/Bandits - Pixel Art/Animations/Light Bandit/LightBandit_AnimController.controller";
+        private const string HeavyBanditControllerPath = "Assets/Bandits - Pixel Art/Animations/Heavy Bandit/HeavyBandit_AnimController.overrideController";
+        private const int CombatIdleAnimState = 1;
+        private const float EnemyDefeatHoldSeconds = 0.45f;
 
         private const int MaxPlayerSlots = 4;
 
@@ -35,6 +40,7 @@ namespace GameLogic.Regicide
         private readonly Transform[] _slotRoots = new Transform[MaxPlayerSlots];
         private readonly Transform[] _actorRoots = new Transform[MaxPlayerSlots];
         private readonly SpriteRenderer[] _actorRenderers = new SpriteRenderer[MaxPlayerSlots];
+        private readonly RegicideActorAnimationDriver[] _actorAnimDrivers = new RegicideActorAnimationDriver[MaxPlayerSlots];
         private readonly Vector3[] _slotIdleWorld = new Vector3[MaxPlayerSlots];
 
         private Scene _scene;
@@ -47,11 +53,15 @@ namespace GameLogic.Regicide
         private Transform _enemyRoot;
         private Transform _enemyActor;
         private SpriteRenderer _enemyRenderer;
+        private RegicideActorAnimationDriver _enemyAnimDriver;
         private Transform _playerActionPoint;
         private Transform _bossAttackPoint;
         private Transform _enemyHitPoint;
+        private Camera _battleCamera;
 
         private Vector3 _enemyIdleWorld;
+        private bool _enemyDeathLatched;
+        private float _enemyDefeatHoldUntil;
 
         protected override void OnInit()
         {
@@ -90,6 +100,7 @@ namespace GameLogic.Regicide
                 CacheBindings();
                 EnsurePlaceholderVisuals();
                 CaptureIdleTransforms();
+                ConfigureBattleAnimators();
                 return IsBindingsValid();
             }
             catch (Exception exception)
@@ -143,6 +154,7 @@ namespace GameLogic.Regicide
             List<string> orderedPlayers = BuildOrderedPlayers(state, publicSnapshot, localPlayerId);
             RebuildPlayerSlots(orderedPlayers);
             RefreshEnemyVisual(state);
+            EnsureFacingDirection();
         }
 
         public async UniTask PlayPlayerAttackAsync(string playerId)
@@ -152,6 +164,7 @@ namespace GameLogic.Regicide
                 return;
             }
 
+            TriggerPlayerAttack(slotIndex);
             Vector3 idle = _slotIdleWorld[slotIndex];
             Vector3 attack = _playerActionPoint != null ? _playerActionPoint.position : idle + new Vector3(2f, 0f, 0f);
             attack.y = idle.y;
@@ -160,6 +173,7 @@ namespace GameLogic.Regicide
             await UniTask.Delay(70);
             await TweenWorldPositionAsync(slotTransform, idle, 0.14f, DG.Tweening.Ease.InCubic);
             slotTransform.position = idle;
+            SetPlayerIdle(slotIndex);
         }
 
         public async UniTask PlayEnemyHitAsync()
@@ -169,6 +183,7 @@ namespace GameLogic.Regicide
                 return;
             }
 
+            TriggerEnemyDamage();
             Vector3 origin = _enemyActor.position;
             Vector3 scale = _enemyActor.localScale;
             await ShakeWorldPositionAsync(_enemyActor, 0.16f, 0.18f);
@@ -176,6 +191,10 @@ namespace GameLogic.Regicide
             await TweenScaleAsync(_enemyActor, scale, 0.08f, DG.Tweening.Ease.InQuad);
             _enemyActor.position = origin;
             _enemyActor.localScale = scale;
+            if (!_enemyDeathLatched)
+            {
+                SetEnemyIdle();
+            }
         }
 
         public async UniTask PlayEnemyDefeatAsync()
@@ -185,6 +204,9 @@ namespace GameLogic.Regicide
                 return;
             }
 
+            _enemyDeathLatched = true;
+            _enemyDefeatHoldUntil = Time.unscaledTime + EnemyDefeatHoldSeconds;
+            TriggerEnemyDeath();
             Vector3 origin = _enemyActor.position;
             Vector3 scale = _enemyActor.localScale;
             Vector3 down = origin + new Vector3(0f, -0.45f, 0f);
@@ -205,6 +227,7 @@ namespace GameLogic.Regicide
                 return;
             }
 
+            TriggerEnemyAttack();
             Vector3 idle = _enemyIdleWorld;
             Vector3 attack = _bossAttackPoint != null ? _bossAttackPoint.position : idle + new Vector3(-2.2f, 0f, 0f);
 
@@ -212,6 +235,10 @@ namespace GameLogic.Regicide
             await UniTask.Delay(90);
             await TweenWorldPositionAsync(_enemyActor, idle, 0.18f, DG.Tweening.Ease.InCubic);
             _enemyActor.position = idle;
+            if (!_enemyDeathLatched)
+            {
+                SetEnemyIdle();
+            }
         }
 
         public async UniTask PlayPlayerHitAsync(string playerId)
@@ -221,9 +248,11 @@ namespace GameLogic.Regicide
                 return;
             }
 
+            TriggerPlayerDamage(slotIndex);
             Vector3 idle = _slotIdleWorld[slotIndex];
             await ShakeWorldPositionAsync(slotTransform, 0.12f, 0.14f);
             slotTransform.position = idle;
+            SetPlayerIdle(slotIndex);
         }
 
         public bool TryGetPlayerHeadWorldPosition(string playerId, out Vector3 worldPosition)
@@ -285,6 +314,12 @@ namespace GameLogic.Regicide
             return true;
         }
 
+        public bool TryGetBattleCamera(out Camera camera)
+        {
+            camera = _battleCamera;
+            return camera != null && camera.gameObject.activeInHierarchy && camera.enabled;
+        }
+
         private void CacheBindings()
         {
             _scene = SceneManager.GetSceneByName(SceneName);
@@ -304,8 +339,14 @@ namespace GameLogic.Regicide
             _playerActionPoint = FindChildRecursive(_root, PlayerActionPointName);
             _bossAttackPoint = FindChildRecursive(_root, BossAttackPointName);
             _enemyHitPoint = FindChildRecursive(_root, EnemyHitPointName);
+            Transform cameraTransform = FindChildRecursive(_root, BattleCameraName);
+            _battleCamera = cameraTransform != null ? cameraTransform.GetComponent<Camera>() : null;
             _enemyActor = FindChildRecursive(_root, EnemyActorName);
             _enemyRenderer = _enemyActor != null ? _enemyActor.GetComponent<SpriteRenderer>() : null;
+            _enemyAnimDriver = RegicideActorAnimationDriver.Create(
+                _enemyActor != null ? _enemyActor.GetComponent<Animator>() : null,
+                actorName: "EnemyActor",
+                expectedControllerPath: HeavyBanditControllerPath);
 
             for (int i = 0; i < MaxPlayerSlots; i++)
             {
@@ -316,6 +357,10 @@ namespace GameLogic.Regicide
                 _slotRoots[i] = slot;
                 _actorRoots[i] = actor;
                 _actorRenderers[i] = actor != null ? actor.GetComponent<SpriteRenderer>() : null;
+                _actorAnimDrivers[i] = RegicideActorAnimationDriver.Create(
+                    actor != null ? actor.GetComponent<Animator>() : null,
+                    actorName: $"PlayerActor_{i}",
+                    expectedControllerPath: LightBanditControllerPath);
             }
         }
 
@@ -378,6 +423,8 @@ namespace GameLogic.Regicide
                     {
                         _playerSlotLookup[playerId] = i;
                     }
+
+                    SetPlayerIdle(i);
                 }
             }
         }
@@ -395,10 +442,123 @@ namespace GameLogic.Regicide
 
             if (enemy == null || _enemyRenderer == null)
             {
+                _enemyDeathLatched = false;
+                _enemyDefeatHoldUntil = 0f;
                 return;
             }
 
+            bool holdDefeatPose = _enemyDeathLatched && Time.unscaledTime < _enemyDefeatHoldUntil;
+            if (holdDefeatPose && !enemy.Defeated)
+            {
+                _enemyRenderer.color = BuildEnemyColor(enemy.Suit, defeated: true);
+                return;
+            }
+
+            if (!enemy.Defeated && _enemyDeathLatched)
+            {
+                _enemyDeathLatched = false;
+                _enemyDefeatHoldUntil = 0f;
+                SetEnemyIdle();
+            }
+
             _enemyRenderer.color = BuildEnemyColor(enemy.Suit, enemy.Defeated);
+        }
+
+        private void ConfigureBattleAnimators()
+        {
+            EnsureFacingDirection();
+            for (int i = 0; i < MaxPlayerSlots; i++)
+            {
+                SetPlayerIdle(i);
+            }
+
+            if (_enemyActor != null && _enemyActor.gameObject.activeInHierarchy)
+            {
+                SetEnemyIdle();
+            }
+        }
+
+        private void EnsureFacingDirection()
+        {
+            for (int i = 0; i < MaxPlayerSlots; i++)
+            {
+                Transform actor = _actorRoots[i];
+                if (actor == null)
+                {
+                    continue;
+                }
+
+                Vector3 scale = actor.localScale;
+                scale.x = -Mathf.Abs(scale.x);
+                actor.localScale = scale;
+            }
+
+            if (_enemyActor != null)
+            {
+                Vector3 enemyScale = _enemyActor.localScale;
+                enemyScale.x = Mathf.Abs(enemyScale.x);
+                _enemyActor.localScale = enemyScale;
+            }
+        }
+
+        private void SetPlayerIdle(int slotIndex)
+        {
+            if (slotIndex < 0 || slotIndex >= MaxPlayerSlots)
+            {
+                return;
+            }
+
+            _actorAnimDrivers[slotIndex]?.SetIdle(CombatIdleAnimState);
+        }
+
+        private void SetEnemyIdle()
+        {
+            if (_enemyDeathLatched)
+            {
+                return;
+            }
+
+            _enemyAnimDriver?.SetIdle(CombatIdleAnimState);
+        }
+
+        private void TriggerPlayerAttack(int slotIndex)
+        {
+            if (slotIndex < 0 || slotIndex >= MaxPlayerSlots)
+            {
+                return;
+            }
+
+            _actorAnimDrivers[slotIndex]?.TriggerAttack(CombatIdleAnimState);
+        }
+
+        private void TriggerPlayerDamage(int slotIndex)
+        {
+            if (slotIndex < 0 || slotIndex >= MaxPlayerSlots)
+            {
+                return;
+            }
+
+            _actorAnimDrivers[slotIndex]?.TriggerDamage(CombatIdleAnimState);
+        }
+
+        private void TriggerEnemyAttack()
+        {
+            _enemyAnimDriver?.TriggerAttack(CombatIdleAnimState);
+        }
+
+        private void TriggerEnemyDamage()
+        {
+            if (_enemyDeathLatched)
+            {
+                return;
+            }
+
+            _enemyAnimDriver?.TriggerDamage(CombatIdleAnimState);
+        }
+
+        private void TriggerEnemyDeath()
+        {
+            _enemyAnimDriver?.TriggerDeath();
         }
 
         private bool TryResolveSlot(string playerId, out int slotIndex, out Transform slotTransform)
@@ -474,32 +634,12 @@ namespace GameLogic.Regicide
 
         private static Color BuildEnemyColor(RegicideSuit suit, bool defeated)
         {
-            Color color;
-            switch (suit)
-            {
-                case RegicideSuit.Spade:
-                    color = new Color(0.28f, 0.34f, 0.42f, 1f);
-                    break;
-                case RegicideSuit.Heart:
-                    color = new Color(0.72f, 0.32f, 0.36f, 1f);
-                    break;
-                case RegicideSuit.Club:
-                    color = new Color(0.3f, 0.58f, 0.32f, 1f);
-                    break;
-                case RegicideSuit.Diamond:
-                    color = new Color(0.76f, 0.6f, 0.3f, 1f);
-                    break;
-                default:
-                    color = new Color(0.58f, 0.46f, 0.74f, 1f);
-                    break;
-            }
-
             if (defeated)
             {
-                color = Color.Lerp(color, new Color(0.25f, 0.25f, 0.25f, 0.75f), 0.62f);
+                return new Color(0.58f, 0.58f, 0.58f, 0.88f);
             }
 
-            return color;
+            return Color.white;
         }
 
         private bool IsBindingsValid()
@@ -542,9 +682,13 @@ namespace GameLogic.Regicide
             _enemyRoot = null;
             _enemyActor = null;
             _enemyRenderer = null;
+            _enemyAnimDriver = null;
             _playerActionPoint = null;
             _bossAttackPoint = null;
             _enemyHitPoint = null;
+            _battleCamera = null;
+            _enemyDeathLatched = false;
+            _enemyDefeatHoldUntil = 0f;
             _playerSlotLookup.Clear();
 
             for (int i = 0; i < MaxPlayerSlots; i++)
@@ -552,6 +696,7 @@ namespace GameLogic.Regicide
                 _slotRoots[i] = null;
                 _actorRoots[i] = null;
                 _actorRenderers[i] = null;
+                _actorAnimDrivers[i] = null;
                 _slotIdleWorld[i] = Vector3.zero;
             }
 

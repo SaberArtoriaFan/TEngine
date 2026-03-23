@@ -103,6 +103,7 @@ namespace GameProto.Regicide
         public int TargetPlayers = 4;
         public int ConnectedPlayers;
         public int ReadyPlayers;
+        public int Seed;
         public long ServerSequence;
         public List<RegicideRoomSeatSnapshot> Seats = new List<RegicideRoomSeatSnapshot>();
     }
@@ -131,6 +132,7 @@ namespace GameProto.Regicide
         public bool IsGameOver;
         public bool IsVictory;
         public int CurrentPlayerIndex;
+        public int Seed;
         public string StateHash = string.Empty;
         public string StateJson = string.Empty;
         public long Timestamp;

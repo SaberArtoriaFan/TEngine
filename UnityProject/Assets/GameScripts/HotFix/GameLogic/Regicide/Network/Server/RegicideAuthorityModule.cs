@@ -99,7 +99,7 @@ namespace GameLogic.Regicide
             {
                 SessionId = sessionId,
                 RuleId = runtime.RuleId,
-                Seed = runtime.RandomSeed,
+                Seed = RegicideSeedUtility.GenerateSessionSeed(),
                 MaxPlayers = maxPlayers,
                 TargetPlayers = maxPlayers,
                 ServerSequence = 0,
@@ -264,6 +264,7 @@ namespace GameLogic.Regicide
                 return;
             }
 
+            session.Seed = RegicideSeedUtility.GenerateSessionSeed();
             session.State = RegicideBattleInitializer.Create(
                 session.SessionId,
                 session.RuleId,
@@ -335,6 +336,7 @@ namespace GameLogic.Regicide
             int battleLogStart = session.State.BattleLog != null ? session.State.BattleLog.Count : 0;
             int enemyHealthBefore = session.State.CurrentEnemy != null ? Mathf.Max(0, session.State.CurrentEnemy.Health) : -1;
             int enemyAttackBefore = session.State.CurrentEnemy != null ? Mathf.Max(0, session.State.CurrentEnemy.Attack) : -1;
+            int enemyIdBefore = session.State.CurrentEnemy != null ? session.State.CurrentEnemy.EnemyId : -1;
             List<string> publicCards = CapturePublicCards(session.State, payload);
 
             RegicidePlayerAction action = new RegicidePlayerAction
@@ -358,18 +360,18 @@ namespace GameLogic.Regicide
             }
 
             session.ServerSequence = result.AppliedSequence;
+            RegicideActionBroadcastPayload actionBroadcast = BuildActionBroadcast(
+                session,
+                payload,
+                result.State,
+                publicCards,
+                battleLogStart,
+                enemyIdBefore,
+                enemyHealthBefore,
+                enemyAttackBefore);
+            PublishActionBroadcast(session, actionBroadcast);
             PublishState(session, result.State);
             PublishPublicStateSnapshot(session);
-            PublishActionBroadcast(
-                session,
-                BuildActionBroadcast(
-                    session,
-                    payload,
-                    result.State,
-                    publicCards,
-                    battleLogStart,
-                    enemyHealthBefore,
-                    enemyAttackBefore));
 
             if (result.State != null && result.State.IsGameOver)
             {
@@ -400,6 +402,7 @@ namespace GameLogic.Regicide
                 TargetPlayers = session.TargetPlayers,
                 ConnectedPlayers = session.PlayerIds.Count,
                 ReadyPlayers = session.ReadyPlayers.Count,
+                Seed = session.Seed,
                 ServerSequence = session.ServerSequence,
                 Seats = new List<RegicideRoomSeatSnapshot>(),
             };
@@ -429,6 +432,7 @@ namespace GameLogic.Regicide
                 IsGameOver = state.IsGameOver,
                 IsVictory = state.IsVictory,
                 CurrentPlayerIndex = state.CurrentPlayerIndex,
+                Seed = state.Seed,
                 StateHash = RegicideStateHasher.ComputeHash(state),
                 StateJson = JsonUtility.ToJson(state),
                 Timestamp = RegicideClock.NowUnixMilliseconds(),
@@ -452,6 +456,7 @@ namespace GameLogic.Regicide
                 IsAwaitingDiscard = session.State != null && session.State.IsAwaitingDiscard,
                 PendingDiscardTargetPlayerIndex = session.State != null ? session.State.PendingDiscardTargetPlayerIndex : -1,
                 CurrentPlayerIndex = session.State != null ? session.State.CurrentPlayerIndex : -1,
+                Seed = session.Seed,
                 Players = new List<RegicidePublicPlayerState>(),
             };
 
@@ -539,7 +544,7 @@ namespace GameLogic.Regicide
 
             session.State = null;
             session.ReadyPlayers.Clear();
-            session.Seed += 1;
+            session.Seed = RegicideSeedUtility.GenerateSessionSeed();
             session.ServerSequence++;
             PublishRoom(session);
         }
@@ -581,6 +586,7 @@ namespace GameLogic.Regicide
             RegicideBattleState state,
             List<string> publicCards,
             int battleLogStart,
+            int enemyIdBefore,
             int enemyHealthBefore,
             int enemyAttackBefore)
         {
@@ -604,6 +610,12 @@ namespace GameLogic.Regicide
                 summaryBuilder.Append(payload.IntentType);
             }
 
+            int enemyIdAfter = state != null && state.CurrentEnemy != null ? state.CurrentEnemy.EnemyId : -1;
+            int enemyHealthAfter = state != null && state.CurrentEnemy != null ? Mathf.Max(0, state.CurrentEnemy.Health) : -1;
+            int enemyAttackAfter = state != null && state.CurrentEnemy != null ? Mathf.Max(0, state.CurrentEnemy.Attack) : -1;
+            bool enemyChanged = enemyIdBefore >= 0 && enemyIdAfter >= 0 && enemyIdBefore != enemyIdAfter;
+            bool enemyDefeated = enemyHealthBefore > 0 && (enemyHealthAfter == 0 || enemyChanged);
+
             return new RegicideActionBroadcastPayload
             {
                 SessionId = session.SessionId,
@@ -612,10 +624,13 @@ namespace GameLogic.Regicide
                 ActionType = ConvertBroadcastType(payload.IntentType),
                 PublicCards = publicCards ?? new List<string>(),
                 Summary = summaryBuilder.ToString(),
+                EnemyDefeated = enemyDefeated,
+                EnemyBeforeId = enemyIdBefore,
+                EnemyAfterId = enemyIdAfter,
                 EnemyHealthBefore = enemyHealthBefore,
-                EnemyHealthAfter = state != null && state.CurrentEnemy != null ? Mathf.Max(0, state.CurrentEnemy.Health) : -1,
+                EnemyHealthAfter = enemyHealthAfter,
                 EnemyAttackBefore = enemyAttackBefore,
-                EnemyAttackAfter = state != null && state.CurrentEnemy != null ? Mathf.Max(0, state.CurrentEnemy.Attack) : -1,
+                EnemyAttackAfter = enemyAttackAfter,
                 IsGameOver = state != null && state.IsGameOver,
                 IsVictory = state != null && state.IsVictory,
                 Timestamp = RegicideClock.NowUnixMilliseconds(),

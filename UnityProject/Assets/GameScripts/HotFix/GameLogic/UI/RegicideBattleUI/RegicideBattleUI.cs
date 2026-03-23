@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using Cysharp.Threading.Tasks;
@@ -18,6 +18,7 @@ namespace GameLogic
         private const float CardHeight = 220f;
         private const float CardMaxSpacing = 180f;
         private const float CardMinSpacing = 98f;
+        private const float UiSafePadding = 16f;
 
         private sealed class CardView
         {
@@ -114,7 +115,6 @@ namespace GameLogic
         private Transform _rectInfoAreaRoot;
         private Transform _rectPlayerAreaRoot;
         private Transform _rectLogAreaRoot;
-        private Transform _rectBottomAreaRoot;
         private Image _imgPlayPreview;
         private Text _txtPlayPreviewHint;
 
@@ -129,6 +129,7 @@ namespace GameLogic
         private bool _logPanelVisible;
         private bool _isDraggingCard;
         private bool _dragPointerInPreview;
+        private bool _enemyTransitionLocked;
 
         private readonly List<int> _selectedCardIndices = new List<int>();
         private readonly List<CardView> _cardViews = new List<CardView>();
@@ -137,7 +138,8 @@ namespace GameLogic
         private readonly List<PreviewCardView> _previewCardViews = new List<PreviewCardView>();
         private readonly List<string> _visiblePlayedCards = new List<string>();
         private readonly Queue<string> _pendingFxQueue = new Queue<string>();
-        private readonly Queue<RegicideActionBroadcastPayload> _pendingActionFxQueue = new Queue<RegicideActionBroadcastPayload>();
+        private readonly List<RegicideActionBroadcastPayload> _pendingActionFxList = new List<RegicideActionBroadcastPayload>();
+        private readonly HashSet<long> _pendingActionFxSeqSet = new HashSet<long>();
         private readonly Dictionary<string, RegicidePublicPlayerState> _publicPlayerLookup = new Dictionary<string, RegicidePublicPlayerState>(StringComparer.Ordinal);
 
         private int _selectedNextPlayerIndex = -1;
@@ -150,7 +152,7 @@ namespace GameLogic
         private string _knownSessionId = string.Empty;
         private string _feedback = string.Empty;
         private string _lastRenderedFeedback = string.Empty;
-        private long _lastQueuedActionSequence;
+        private long _lastPlayedActionSequence;
         private Vector2 _dragPointerOffset;
 
         protected override void ScriptGenerator()
@@ -194,13 +196,11 @@ namespace GameLogic
             _rectRootCanvas = rectTransform;
             _imgPlayPreview = _rectPlayPreview != null ? _rectPlayPreview.GetComponent<Image>() : null;
             _txtPlayPreviewHint = FindComponentByName<Text>("m_txtPlayPreviewHint");
-            _rectActorInfoLayer = FindComponentByName<RectTransform>("m_rectActorInfoLayer")
-                ?? FindComponentByName<RectTransform>("m_goUnusedMcpRectTest");
+            _rectActorInfoLayer = FindComponentByName<RectTransform>("m_rectActorInfoLayer");
             _rectEnemyAreaRoot = FindTransformByName("m_rectEnemyArea");
             _rectInfoAreaRoot = FindTransformByName("m_rectInfoArea");
             _rectPlayerAreaRoot = FindTransformByName("m_rectPlayerArea");
             _rectLogAreaRoot = FindTransformByName("m_rectLogArea");
-            _rectBottomAreaRoot = FindTransformByName("m_rectBottomArea");
 
             Transform helpMask = FindTransformByName("m_goHelpMask");
             _helpMask = helpMask != null ? helpMask.gameObject : null;
@@ -294,14 +294,16 @@ protected override void OnCreate()
             _playingFxQueue = false;
             _pendingAutoScroll = false;
             _pendingFxQueue.Clear();
-            _pendingActionFxQueue.Clear();
+            _pendingActionFxList.Clear();
+            _pendingActionFxSeqSet.Clear();
             _visiblePlayedCards.Clear();
             _navigatingResult = false;
             _playingActionFxQueue = false;
             _selectedCardIndices.Clear();
             _selectedNextPlayerIndex = -1;
             _playedCardsVersion = 0;
-            _lastQueuedActionSequence = 0;
+            _lastPlayedActionSequence = 0;
+            _enemyTransitionLocked = false;
             ApplyHudRuntimeStyle();
             HideStageFx();
             RenderPlayedCardsPanel();
@@ -322,7 +324,7 @@ protected override void OnCreate()
             ApplyImageStyle(FindComponentByName<Image>("m_rectInfoArea"), 0.18f, null);
             ApplyImageStyle(FindComponentByName<Image>("m_rectPlayerArea"), 0.18f, null);
             ApplyImageStyle(FindComponentByName<Image>("m_rectLogArea"), 0.22f, null);
-            ApplyImageStyle(FindComponentByName<Image>("m_rectActorInfoLayer") ?? FindComponentByName<Image>("m_goUnusedMcpRectTest"), 0f, false);
+            ApplyImageStyle(_rectActorInfoLayer != null ? _rectActorInfoLayer.GetComponent<Image>() : null, 0f, false);
             ApplyImageStyle(FindComponentByName<Image>("m_rectBottomArea"), 0f, false);
             ApplyImageStyle(FindComponentByName<Image>("m_rectActionArea"), 0.12f, null);
             ApplyImageStyle(FindComponentByName<Image>("m_rectHandArea"), 0.08f, null);
@@ -332,12 +334,6 @@ protected override void OnCreate()
 
             if (_rectPlayPreview != null)
             {
-                SetRect(_rectPlayPreview,
-                    new Vector2(0.5f, 0f),
-                    new Vector2(0.5f, 0f),
-                    new Vector2(0.5f, 0.5f),
-                    new Vector2(0f, 214f),
-                    new Vector2(700f, 146f));
                 _rectPlayPreview.gameObject.SetActive(false);
             }
 
@@ -347,48 +343,21 @@ protected override void OnCreate()
                 _txtPlayPreviewHint.text = "左键选牌组合，再点击出牌按钮";
             }
 
-            if (_rectPreviewCardsRoot != null)
-            {
-                SetRect(_rectPreviewCardsRoot,
-                    new Vector2(0.02f, 0.08f),
-                    new Vector2(0.73f, 0.92f),
-                    new Vector2(0.5f, 0.5f),
-                    Vector2.zero,
-                    Vector2.zero);
-            }
-
             if (_previewCardTemplateButton != null)
             {
                 _previewCardTemplateButton.gameObject.SetActive(false);
             }
 
-            EnsureActorInfoLayer();
             if (_rectActorInfoLayer != null)
             {
                 if (_txtEnemyInfo != null)
                 {
-                    _txtEnemyInfo.rectTransform.SetParent(_rectActorInfoLayer, false);
                     _txtEnemyInfo.gameObject.SetActive(true);
-                    SetRect(_txtEnemyInfo.rectTransform,
-                        new Vector2(0.5f, 0.5f),
-                        new Vector2(0.5f, 0.5f),
-                        new Vector2(0.5f, 0f),
-                        new Vector2(260f, 180f),
-                        new Vector2(360f, 110f));
-                    _txtEnemyInfo.alignment = TextAnchor.MiddleCenter;
                 }
 
                 if (_txtOtherPlayers != null)
                 {
-                    _txtOtherPlayers.rectTransform.SetParent(_rectActorInfoLayer, false);
                     _txtOtherPlayers.gameObject.SetActive(true);
-                    SetRect(_txtOtherPlayers.rectTransform,
-                        new Vector2(1f, 1f),
-                        new Vector2(1f, 1f),
-                        new Vector2(1f, 1f),
-                        new Vector2(-36f, -74f),
-                        new Vector2(320f, 240f));
-                    _txtOtherPlayers.alignment = TextAnchor.UpperLeft;
                 }
             }
 
@@ -406,77 +375,12 @@ protected override void OnCreate()
 
             if (_txtDiscardPile != null)
             {
-                SetRect(_txtDiscardPile.rectTransform,
-                    new Vector2(0f, 0f),
-                    new Vector2(0f, 0f),
-                    new Vector2(0f, 0f),
-                    new Vector2(20f, 16f),
-                    new Vector2(260f, 54f));
-                _txtDiscardPile.alignment = TextAnchor.MiddleLeft;
                 _txtDiscardPile.raycastTarget = false;
             }
 
             if (_txtDrawPile != null)
             {
-                SetRect(_txtDrawPile.rectTransform,
-                    new Vector2(1f, 0f),
-                    new Vector2(1f, 0f),
-                    new Vector2(1f, 0f),
-                    new Vector2(-20f, 16f),
-                    new Vector2(260f, 54f));
-                _txtDrawPile.alignment = TextAnchor.MiddleRight;
                 _txtDrawPile.raycastTarget = false;
-            }
-        }
-
-        private void EnsureActorInfoLayer()
-        {
-            if (_rectRootCanvas == null)
-            {
-                return;
-            }
-
-            if (_rectActorInfoLayer == null)
-            {
-                Transform existing = FindTransformByName("m_rectActorInfoLayer") ?? FindTransformByName("m_goUnusedMcpRectTest");
-                if (existing != null)
-                {
-                    _rectActorInfoLayer = existing.GetComponent<RectTransform>();
-                }
-
-                if (_rectActorInfoLayer == null)
-                {
-                    GameObject go = new GameObject("m_rectActorInfoLayer", typeof(RectTransform));
-                    _rectActorInfoLayer = go.GetComponent<RectTransform>();
-                }
-            }
-
-            if (_rectActorInfoLayer == null)
-            {
-                return;
-            }
-
-            _rectActorInfoLayer.SetParent(_rectRootCanvas, false);
-            SetRect(_rectActorInfoLayer,
-                new Vector2(0f, 0f),
-                new Vector2(1f, 1f),
-                new Vector2(0.5f, 0.5f),
-                Vector2.zero,
-                Vector2.zero);
-
-            if (_rectBottomAreaRoot != null && _rectBottomAreaRoot.parent == _rectRootCanvas)
-            {
-                int bottomIndex = _rectBottomAreaRoot.GetSiblingIndex();
-                _rectActorInfoLayer.SetSiblingIndex(Mathf.Max(0, bottomIndex - 1));
-            }
-            else
-            {
-                _rectActorInfoLayer.SetSiblingIndex(0);
-            }
-
-            if (_helpMask != null)
-            {
-                _helpMask.transform.SetAsLastSibling();
             }
         }
 
@@ -504,7 +408,6 @@ protected override void OnCreate()
                 return;
             }
 
-            EnsureActorInfoLayer();
             if (_rectActorInfoLayer == null)
             {
                 return;
@@ -531,15 +434,6 @@ protected override void OnCreate()
                 if (view.Avatar != null) view.Avatar.gameObject.SetActive(false);
                 if (view.Phase != null) view.Phase.gameObject.SetActive(false);
                 if (view.Background != null) view.Background.color = new Color(0.05f, 0.08f, 0.12f, 0.66f);
-                if (view.Rect != null)
-                {
-                    SetRect(view.Rect,
-                        new Vector2(0.5f, 0.5f),
-                        new Vector2(0.5f, 0.5f),
-                        new Vector2(0.5f, 0.5f),
-                        Vector2.zero,
-                        new Vector2(220f, 64f));
-                }
 
                 _playerHeadLabels.Add(view);
             }
@@ -561,10 +455,14 @@ protected override void OnCreate()
                 _feedback = payload.Summary;
             }
 
-            if (payload.ServerSequence > _lastQueuedActionSequence)
+            bool queued = TryQueueActionFxPayload(payload);
+            if (queued && payload.ActionType == RegicideActionBroadcastType.PlayCard && payload.EnemyDefeated)
             {
-                _lastQueuedActionSequence = payload.ServerSequence;
-                _pendingActionFxQueue.Enqueue(payload);
+                _enemyTransitionLocked = true;
+            }
+
+            if (queued)
+            {
                 PlayActionFxQueueAsync().Forget();
             }
 
@@ -1238,9 +1136,11 @@ private void RefreshBattleView()
             }
 
             UpdateFeedbackFromState(state);
-            GameModule.RegicideBattlePresentation.SyncBattleState(state, GameModule.RegicideBattle.PublicStateSnapshot, GameModule.RegicideBattle.LocalPlayerId);
-
-            RenderEnemyPanel(state);
+            if (!_enemyTransitionLocked)
+            {
+                GameModule.RegicideBattlePresentation.SyncBattleState(state, GameModule.RegicideBattle.PublicStateSnapshot, GameModule.RegicideBattle.LocalPlayerId);
+                RenderEnemyPanel(state);
+            }
             RenderPlayerPanel(state, player, actions);
             RenderOtherPlayersPanel(state);
             RefreshPlayPreviewState(player, actions);
@@ -1282,19 +1182,16 @@ private void RefreshBattleView()
                 $"生命 {Mathf.Max(0, enemy.Health)}    攻击 {Mathf.Max(0, enemy.Attack)}\n" +
                 $"花色免疫：{immunity}";
 
-            Vector2 anchored = new Vector2(420f, 210f);
+            RectTransform enemyRect = _txtEnemyInfo.rectTransform;
             if (GameModule.RegicideBattlePresentation.TryGetEnemyHeadWorldPosition(out Vector3 worldPos) &&
-                TryWorldToCanvasPoint(worldPos + new Vector3(0f, 0.1f, 0f), out Vector2 mapped))
+                TryWorldToLayerWorldPoint(worldPos + new Vector3(0f, 0.1f, 0f), out Vector3 mappedWorld))
             {
-                anchored = mapped;
+                enemyRect.position = mappedWorld;
             }
-
-            SetRect(_txtEnemyInfo.rectTransform,
-                new Vector2(0.5f, 0.5f),
-                new Vector2(0.5f, 0.5f),
-                new Vector2(0.5f, 0f),
-                anchored,
-                new Vector2(340f, 108f));
+            else
+            {
+                enemyRect.anchoredPosition = ClampAnchoredToLayer(enemyRect, enemyRect.anchoredPosition, UiSafePadding);
+            }
         }
 
         private void RenderPlayerPanel(RegicideBattleState state, RegicidePlayerState player, RegicideAvailableActionSnapshot actions)
@@ -1502,7 +1399,7 @@ private void RefreshBattleView()
             }
         }
 
-private void RenderPlayerHeadLabels(RegicideBattleState state)
+        private void RenderPlayerHeadLabels(RegicideBattleState state)
         {
             EnsurePlayerHeadLabels();
             if (_playerHeadLabels.Count <= 0)
@@ -1532,13 +1429,6 @@ private void RenderPlayerHeadLabels(RegicideBattleState state)
                     continue;
                 }
 
-                Vector2 anchored = new Vector2(-560f + i * 180f, -40f - i * 70f);
-                if (GameModule.RegicideBattlePresentation.TryGetPlayerHeadWorldPosition(player.PlayerId, out Vector3 worldPos) &&
-                    TryWorldToCanvasPoint(worldPos, out Vector2 mapped))
-                {
-                    anchored = mapped;
-                }
-
                 PlayerHeadLabelView view = _playerHeadLabels[i];
                 if (view?.Root == null || view.Rect == null)
                 {
@@ -1547,12 +1437,15 @@ private void RenderPlayerHeadLabels(RegicideBattleState state)
 
                 view.Root.SetActive(true);
                 view.PlayerId = player.PlayerId;
-                SetRect(view.Rect,
-                    new Vector2(0.5f, 0.5f),
-                    new Vector2(0.5f, 0.5f),
-                    new Vector2(0.5f, 0.5f),
-                    anchored,
-                    new Vector2(220f, 64f));
+                if (GameModule.RegicideBattlePresentation.TryGetPlayerHeadWorldPosition(player.PlayerId, out Vector3 worldPos) &&
+                    TryWorldToLayerWorldPoint(worldPos, out Vector3 mappedWorld))
+                {
+                    view.Rect.position = mappedWorld;
+                }
+                else
+                {
+                    view.Rect.anchoredPosition = ClampAnchoredToLayer(view.Rect, view.Rect.anchoredPosition, UiSafePadding);
+                }
 
                 bool isCurrent = i == state.CurrentPlayerIndex;
                 int handCount = TryGetHandCount(player.PlayerId, player.Hand != null ? player.Hand.Count : 0);
@@ -1575,20 +1468,15 @@ private void RenderPlayerHeadLabels(RegicideBattleState state)
             }
         }
 
-private void RenderTurnOrder(RegicideBattleState state)
+        private void RenderTurnOrder(RegicideBattleState state)
         {
             if (_txtOtherPlayers == null)
             {
                 return;
             }
 
-            SetRect(_txtOtherPlayers.rectTransform,
-                new Vector2(1f, 1f),
-                new Vector2(1f, 1f),
-                new Vector2(1f, 1f),
-                new Vector2(-36f, -74f),
-                new Vector2(320f, 240f));
-            _txtOtherPlayers.alignment = TextAnchor.UpperLeft;
+            RectTransform turnOrderRect = _txtOtherPlayers.rectTransform;
+            turnOrderRect.anchoredPosition = ClampAnchoredToLayer(turnOrderRect, turnOrderRect.anchoredPosition, UiSafePadding);
 
             if (state?.Players == null || state.Players.Count <= 0)
             {
@@ -1634,7 +1522,7 @@ private void RenderTurnOrder(RegicideBattleState state)
             return Mathf.Max(0, fallback);
         }
 
-private bool TryWorldToCanvasPoint(Vector3 worldPos, out Vector2 anchored)
+        private bool TryWorldToCanvasPoint(Vector3 worldPos, out Vector2 anchored)
         {
             anchored = Vector2.zero;
             RectTransform target = _rectActorInfoLayer != null ? _rectActorInfoLayer : _rectRootCanvas;
@@ -1644,20 +1532,123 @@ private bool TryWorldToCanvasPoint(Vector3 worldPos, out Vector2 anchored)
             }
 
             Camera worldCamera = ResolveWorldCamera();
-            Vector2 screenPoint = RectTransformUtility.WorldToScreenPoint(worldCamera, worldPos);
-            Camera uiEventCamera = ResolveUiEventCamera();
+            if (worldCamera == null)
+            {
+                return false;
+            }
+
+            Vector3 viewport = worldCamera.WorldToViewportPoint(worldPos);
+            if (viewport.z <= 0f)
+            {
+                return false;
+            }
+
+            Rect pixelRect = worldCamera.pixelRect;
+            Vector3 screenPoint3 = new Vector3(
+                pixelRect.x + viewport.x * pixelRect.width,
+                pixelRect.y + viewport.y * pixelRect.height,
+                viewport.z);
+            if (screenPoint3.z <= 0f)
+            {
+                return false;
+            }
+
+            Vector2 screenPoint = new Vector2(screenPoint3.x, screenPoint3.y);
+            Camera uiEventCamera = ResolveUiEventCamera(target);
             return RectTransformUtility.ScreenPointToLocalPointInRectangle(target, screenPoint, uiEventCamera, out anchored);
         }
 
-        private Camera ResolveUiEventCamera()
+        private bool TryWorldToLayerWorldPoint(Vector3 worldPos, out Vector3 mappedWorld)
         {
-            if (_rectRootCanvas == null)
+            mappedWorld = Vector3.zero;
+            RectTransform target = _rectActorInfoLayer != null ? _rectActorInfoLayer : _rectRootCanvas;
+            if (target == null)
+            {
+                return false;
+            }
+
+            Camera worldCamera = ResolveWorldCamera();
+            if (worldCamera == null)
+            {
+                return false;
+            }
+
+            Vector3 viewport = worldCamera.WorldToViewportPoint(worldPos);
+            if (viewport.z <= 0f)
+            {
+                return false;
+            }
+
+            Rect pixelRect = worldCamera.pixelRect;
+            Vector2 screenPoint = new Vector2(
+                pixelRect.x + viewport.x * pixelRect.width,
+                pixelRect.y + viewport.y * pixelRect.height);
+            Camera uiEventCamera = ResolveUiEventCamera(target);
+            return RectTransformUtility.ScreenPointToWorldPointInRectangle(target, screenPoint, uiEventCamera, out mappedWorld);
+        }
+
+        private Vector2 ClampAnchoredToLayer(RectTransform uiRect, Vector2 anchored, float padding)
+        {
+            if (uiRect == null)
+            {
+                return anchored;
+            }
+
+            RectTransform target = _rectActorInfoLayer != null ? _rectActorInfoLayer : _rectRootCanvas;
+            if (target == null)
+            {
+                return anchored;
+            }
+
+            Rect rect = target.rect;
+            if (rect.width <= 0f || rect.height <= 0f)
+            {
+                return anchored;
+            }
+
+            Vector2 size = uiRect.sizeDelta;
+            Vector2 pivot = uiRect.pivot;
+            float halfWidth = rect.width * 0.5f;
+            float halfHeight = rect.height * 0.5f;
+            float minX = -halfWidth + size.x * pivot.x + padding;
+            float maxX = halfWidth - size.x * (1f - pivot.x) - padding;
+            float minY = -halfHeight + size.y * pivot.y + padding;
+            float maxY = halfHeight - size.y * (1f - pivot.y) - padding;
+
+            if (minX > maxX)
+            {
+                float middle = (minX + maxX) * 0.5f;
+                minX = middle;
+                maxX = middle;
+            }
+
+            if (minY > maxY)
+            {
+                float middle = (minY + maxY) * 0.5f;
+                minY = middle;
+                maxY = middle;
+            }
+
+            anchored.x = Mathf.Clamp(anchored.x, minX, maxX);
+            anchored.y = Mathf.Clamp(anchored.y, minY, maxY);
+            return anchored;
+        }
+
+        private Camera ResolveUiEventCamera(RectTransform target = null)
+        {
+            RectTransform pivot = target != null ? target : _rectRootCanvas;
+            if (pivot == null)
             {
                 return null;
             }
 
-            Canvas canvas = _rectRootCanvas.GetComponent<Canvas>();
-            if (canvas == null || canvas.renderMode == RenderMode.ScreenSpaceOverlay)
+            Canvas canvas = pivot.GetComponentInParent<Canvas>();
+            if (canvas == null)
+            {
+                return null;
+            }
+
+            if (canvas.renderMode == RenderMode.ScreenSpaceOverlay)
             {
                 return null;
             }
@@ -1667,18 +1658,45 @@ private bool TryWorldToCanvasPoint(Vector3 worldPos, out Vector2 anchored)
                 return canvas.worldCamera;
             }
 
+            if (canvas.renderMode == RenderMode.WorldSpace)
+            {
+                return ResolveWorldCamera();
+            }
+
             return ResolveWorldCamera();
         }
 
-private static Camera ResolveWorldCamera()
+        private Camera ResolveWorldCamera()
         {
+            if (GameModule.RegicideBattlePresentation.TryGetBattleCamera(out Camera battleCamera) &&
+                battleCamera != null &&
+                battleCamera.enabled &&
+                battleCamera.gameObject.activeInHierarchy)
+            {
+                return battleCamera;
+            }
+
             if (Camera.main != null)
             {
                 return Camera.main;
             }
 
             Camera[] all = Camera.allCameras;
-            return all != null && all.Length > 0 ? all[0] : null;
+            if (all == null || all.Length <= 0)
+            {
+                return null;
+            }
+
+            for (int i = 0; i < all.Length; i++)
+            {
+                Camera camera = all[i];
+                if (camera != null && camera.enabled && camera.gameObject.activeInHierarchy)
+                {
+                    return camera;
+                }
+            }
+
+            return all[0];
         }
 
 private void RenderPlayedCardsPanel()
@@ -2243,10 +2261,13 @@ private void EnsureCardViewCount(int count)
                 _feedback = string.Empty;
                 _playingFxQueue = false;
                 _pendingFxQueue.Clear();
-                _pendingActionFxQueue.Clear();
+                _pendingActionFxList.Clear();
+                _pendingActionFxSeqSet.Clear();
+                _lastPlayedActionSequence = 0;
                 _visiblePlayedCards.Clear();
                 _playedCardsVersion++;
                 HideStageFx();
+                _enemyTransitionLocked = false;
                 ResetDraggingCardState(true);
                 _hoverCardIndex = -1;
                 _navigatingResult = false;
@@ -2277,10 +2298,21 @@ private void EnsureCardViewCount(int count)
 
             try
             {
-                while (_pendingActionFxQueue.Count > 0)
+                while (_pendingActionFxList.Count > 0)
                 {
-                    RegicideActionBroadcastPayload payload = _pendingActionFxQueue.Dequeue();
+                    RegicideActionBroadcastPayload payload = _pendingActionFxList[0];
+                    _pendingActionFxList.RemoveAt(0);
                     if (payload == null) continue;
+                    if (payload.ServerSequence > 0)
+                    {
+                        _pendingActionFxSeqSet.Remove(payload.ServerSequence);
+                        if (payload.ServerSequence <= _lastPlayedActionSequence)
+                        {
+                            continue;
+                        }
+
+                        _lastPlayedActionSequence = payload.ServerSequence;
+                    }
 
                     if (payload.PublicCards != null && payload.PublicCards.Count > 0)
                     {
@@ -2306,6 +2338,47 @@ private void EnsureCardViewCount(int count)
             }
         }
 
+        private bool TryQueueActionFxPayload(RegicideActionBroadcastPayload payload)
+        {
+            if (payload == null)
+            {
+                return false;
+            }
+
+            long sequence = payload.ServerSequence;
+            if (sequence <= 0)
+            {
+                _pendingActionFxList.Add(payload);
+                return true;
+            }
+
+            if (sequence <= _lastPlayedActionSequence || _pendingActionFxSeqSet.Contains(sequence))
+            {
+                return false;
+            }
+
+            int insertIndex = _pendingActionFxList.Count;
+            for (int i = 0; i < _pendingActionFxList.Count; i++)
+            {
+                RegicideActionBroadcastPayload queued = _pendingActionFxList[i];
+                long queuedSeq = queued != null ? queued.ServerSequence : 0;
+                if (queuedSeq <= 0)
+                {
+                    continue;
+                }
+
+                if (sequence < queuedSeq)
+                {
+                    insertIndex = i;
+                    break;
+                }
+            }
+
+            _pendingActionFxList.Insert(insertIndex, payload);
+            _pendingActionFxSeqSet.Add(sequence);
+            return true;
+        }
+
         private async UniTask AnimatePlayerAttackSequenceAsync(RegicideActionBroadcastPayload payload)
         {
             if (payload == null)
@@ -2316,10 +2389,21 @@ private void EnsureCardViewCount(int count)
             await AnimatePlayerDashAsync(payload.ActorPlayerId);
             await AnimateEnemyHitAsync();
 
-            bool enemyDefeated = payload.EnemyHealthBefore > 0 && payload.EnemyHealthAfter == 0;
+            bool enemyDefeated = payload.EnemyDefeated || (payload.EnemyHealthBefore > 0 && payload.EnemyHealthAfter == 0);
             if (enemyDefeated)
             {
-                await AnimateEnemyDeathAsync();
+                _enemyTransitionLocked = true;
+                try
+                {
+                    await AnimateEnemyDeathAsync();
+                    await UniTask.Delay(420);
+                }
+                finally
+                {
+                    _enemyTransitionLocked = false;
+                }
+
+                RefreshBattleView();
             }
         }
 
