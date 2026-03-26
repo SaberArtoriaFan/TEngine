@@ -1,0 +1,8 @@
+D:\Fork\FFD\Assets\ScriptsAssembly\SaberGAS\RoslynAnalyzers\Saber.GAS.CustomTriggerActionGenerator.deps.json
+D:\Fork\FFD\Assets\ScriptsAssembly\SaberGAS\RoslynAnalyzers\Saber.GAS.CustomTriggerActionGenerator.dll
+D:\Fork\FFD\Assets\ScriptsAssembly\SaberGAS\SourceGenerator~\Saber.GAS.CustomTriggerActionGenerator\obj\Debug\Saber.GAS.CustomTriggerActionGenerator.csproj.AssemblyReference.cache
+D:\Fork\FFD\Assets\ScriptsAssembly\SaberGAS\SourceGenerator~\Saber.GAS.CustomTriggerActionGenerator\obj\Debug\Saber.GAS.CustomTriggerActionGenerator.GeneratedMSBuildEditorConfig.editorconfig
+D:\Fork\FFD\Assets\ScriptsAssembly\SaberGAS\SourceGenerator~\Saber.GAS.CustomTriggerActionGenerator\obj\Debug\Saber.GAS.CustomTriggerActionGenerator.AssemblyInfoInputs.cache
+D:\Fork\FFD\Assets\ScriptsAssembly\SaberGAS\SourceGenerator~\Saber.GAS.CustomTriggerActionGenerator\obj\Debug\Saber.GAS.CustomTriggerActionGenerator.AssemblyInfo.cs
+D:\Fork\FFD\Assets\ScriptsAssembly\SaberGAS\SourceGenerator~\Saber.GAS.CustomTriggerActionGenerator\obj\Debug\Saber.GAS.CustomTriggerActionGenerator.csproj.CoreCompileInputs.cache
+D:\Fork\FFD\Assets\ScriptsAssembly\SaberGAS\SourceGenerator~\Saber.GAS.CustomTriggerActionGenerator\obj\Debug\Saber.GAS.CustomTriggerActionGenerator.dll

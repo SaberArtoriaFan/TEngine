@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+  <metadata>
+    <id>FastCloner.SourceGenerator</id>
+    <version>1.2.0</version>
+    <title>FastCloner - SourceGenerator</title>
+    <authors>Matěj Štágl</authors>
+    <license type="expression">MIT</license>
+    <licenseUrl>https://licenses.nuget.org/MIT</licenseUrl>
+    <icon>icon.jpg</icon>
+    <readme>README.md</readme>
+    <projectUrl>https://github.com/lofcz/FastCloner</projectUrl>
+    <description>Source generator for FastCloner that generates high-performance deep clone methods at compile time.</description>
+    <tags>deepclone,clone,fastclone,cloner,source-generator,sourcegen,codegen,aot,ahead-of-time,copier</tags>
+    <repository type="git" url="https://github.com/lofcz/FastCloner" branch="refs/heads/next" commit="72797094eef1970bcaef9a93bad534fea617f1e1" />
+  </metadata>
+</package>

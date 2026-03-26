@@ -1,0 +1,16 @@
+{
+    "name": "Saber.GAS",
+    "rootNamespace": "Saber.GAS",
+    "references": [
+        "FixedPoint"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}
