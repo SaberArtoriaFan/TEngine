@@ -1,0 +1,17 @@
+{
+    "name": "Saber.GAS.Authoring",
+    "rootNamespace": "Saber.GAS.Authoring",
+    "references": [
+        "Saber.GAS",
+        "FixedPoint"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
