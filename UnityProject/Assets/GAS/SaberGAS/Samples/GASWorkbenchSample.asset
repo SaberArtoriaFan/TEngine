@@ -1,0 +1,262 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &-6683798884877645087
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 151765e87c70434c80e36939c7007d39, type: 3}
+  m_Name: Trigger_BattleFocusPulse
+  m_EditorClassIdentifier: 
+  _modules:
+  - rid: 1762773924573085720
+  - rid: 1762773924573085721
+  - rid: 1762773924573085722
+  - rid: 1762773924573085723
+  references:
+    version: 2
+    RefIds:
+    - rid: 1762773924573085720
+      type: {class: TriggerIdentityModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _triggerId: trigger.sample.battlefocus_pulse
+        _displayName: Battle Focus Pulse
+    - rid: 1762773924573085721
+      type: {class: TriggerRoutingModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _sourceKind: 2
+        _eventKind: 14
+        _timing: 3
+        _collectionMode: 0
+        _priority: 0
+    - rid: 1762773924573085722
+      type: {class: TriggerTagFilterModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _requiredOwnerTags:
+        - unit.player
+        _blockedOwnerTags: []
+        _requiredInstigatorTags: []
+        _blockedInstigatorTags: []
+        _requiredTargetTags: []
+        _blockedTargetTags: []
+        _requiredIncomingAbilityTags: []
+        _blockedIncomingAbilityTags: []
+        _requiredIncomingEffectTags: []
+        _blockedIncomingEffectTags: []
+        _requiredImpactTags: []
+        _blockedImpactTags: []
+    - rid: 1762773924573085723
+      type: {class: TriggerActionModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _action:
+          _kind: 2
+          _sourceActor: 1
+          _targetActor: 1
+          _triggeredAbility: {fileID: 0}
+          _effectAsset: {fileID: -5507787398291717992}
+          _effectTag: 
+          _resourceId: 
+          _resourceAmount:
+            _value: 0
+          _tag: state.passive.sample
+          _operationTemplate:
+            _type: 0
+            _resourceId: 
+            _effectAsset: {fileID: 0}
+            _tag: 
+            _amount:
+              _value: 0
+            _cueName: 
+          _magnitudeMultiplier:
+            _value: 1
+          _cueName: 
+          _abilityToCancel: {fileID: 0}
+          _customActionId: 0
+--- !u!114 &-5507787398291717992
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 76a551a2fb9243e08a9bc9a215dd5917, type: 3}
+  m_Name: Effect_BattleFocus
+  m_EditorClassIdentifier: 
+  _modules:
+  - rid: 1762773924573085724
+  - rid: 1762773924573085725
+  - rid: 1762773924573085726
+  references:
+    version: 2
+    RefIds:
+    - rid: 1762773924573085724
+      type: {class: EffectIdentityModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _effectId: effect.sample.battlefocus
+    - rid: 1762773924573085725
+      type: {class: EffectTagRulesModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _effectTags:
+        - effect.buff
+        - sample.focus
+        _grantedTags:
+        - state.focused
+        - state.buff.sample
+        _requiredTargetTags: []
+        _blockedTargetTags: []
+    - rid: 1762773924573085726
+      type: {class: EffectTimingModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _durationTicks: 180
+        _periodTicks: 30
+        _maxStacks: 3
+        _durationPolicy: 1
+        _stackPolicy: 1
+--- !u!114 &-364950324580105957
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 76a551a2fb9243e08a9bc9a215dd5917, type: 3}
+  m_Name: Effect_01
+  m_EditorClassIdentifier: 
+  _modules:
+  - rid: 1762773924573085727
+  - rid: 1762773924573085728
+  references:
+    version: 2
+    RefIds:
+    - rid: 1762773924573085727
+      type: {class: EffectIdentityModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _effectId: effect.effect-01
+    - rid: 1762773924573085728
+      type: {class: EffectResourcePayloadModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _instantResourceDeltas:
+        - _resourceId: health
+          _amount:
+            _value: -10
+        _periodicResourceDeltas: []
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b49b88bf76f46adadb06b37807c7a01, type: 3}
+  m_Name: GASWorkbenchSample
+  m_EditorClassIdentifier: 
+  _randomSeed: 20260326
+  _worldTags:
+  - sample.workbench
+  - combat.demo
+  _globalTagDefinitions: []
+  _globalResourceDefinitions: []
+  _initialActors:
+  - _enabled: 1
+    _template: {fileID: 8780509122500314595}
+    _actorIdOverride: actor.sample.hero.spawned
+    _teamIdOverride: player
+    _overridePosition: 1
+    _positionOverride:
+      _x: 0
+      _y: 0
+      _z: 0
+  _abilities:
+  - {fileID: 8181336932155160757}
+  _effects:
+  - {fileID: -364950324580105957}
+  - {fileID: -5507787398291717992}
+  _triggers:
+  - {fileID: -6683798884877645087}
+  _actorTemplates:
+  - {fileID: 8780509122500314595}
+--- !u!114 &8181336932155160757
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b57df84526e459aa5876ae94817bbb4, type: 3}
+  m_Name: Ability_FireBolt
+  m_EditorClassIdentifier: 
+  _modules:
+  - rid: 1762773924573085729
+  - rid: 1762773924573085730
+  - rid: 1762773924573085731
+  - rid: 1762773924573085732
+  references:
+    version: 2
+    RefIds:
+    - rid: 1762773924573085729
+      type: {class: AbilityIdentityModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _abilityId: ability.sample.firebolt
+        _displayName: Fire Bolt
+    - rid: 1762773924573085730
+      type: {class: AbilityTagRulesModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _abilityTags:
+        - ability.offense
+        - sample.fire
+        _grantedTagsWhileActive: []
+        _activationRequiredTags: []
+        _activationBlockedTags: []
+    - rid: 1762773924573085731
+      type: {class: AbilityCostCooldownModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _costs: []
+        _cooldownTicks: 60
+        _cooldownTag: cooldown.firebolt
+    - rid: 1762773924573085732
+      type: {class: AbilityEffectPayloadModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _effects:
+        - {fileID: -364950324580105957}
+        _periodicEffects: []
+        _endEffects: []
+--- !u!114 &8780509122500314595
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d9f231eb61a049a5bbe101819115bde3, type: 3}
+  m_Name: ActorTemplate_Hero
+  m_EditorClassIdentifier: 
+  _defaultActorId: actor.sample.hero
+  _defaultTeamId: player
+  _defaultPosition:
+    _x: 0
+    _y: 0
+    _z: 0
+  _initialTags:
+  - unit.player
+  - sample.hero
+  - class.mage
+  _attributes: []
+  _resources: []
+  _grantedAbilities:
+  - {fileID: 8181336932155160757}
+  _actorTriggers:
+  - {fileID: -6683798884877645087}

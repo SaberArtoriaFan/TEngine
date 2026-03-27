@@ -1,0 +1,151 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &-742644517285375462
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b57df84526e459aa5876ae94817bbb4, type: 3}
+  m_Name: Ability_01
+  m_EditorClassIdentifier: 
+  _modules:
+  - rid: 1762773924573085733
+  - rid: 1762773924573085734
+  references:
+    version: 2
+    RefIds:
+    - rid: 1762773924573085733
+      type: {class: AbilityIdentityModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _abilityId: ability.ability-01
+        _displayName: Instant Damage
+    - rid: 1762773924573085734
+      type: {class: AbilityEffectPayloadModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _effects:
+        - {fileID: 4234681123636955475}
+        _periodicEffects: []
+        _endEffects: []
+--- !u!114 &-358614391682280683
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 151765e87c70434c80e36939c7007d39, type: 3}
+  m_Name: Trigger_01
+  m_EditorClassIdentifier: 
+  _modules:
+  - rid: 1762773924573085735
+  - rid: 1762773924573085736
+  - rid: 1762773924573085737
+  references:
+    version: 2
+    RefIds:
+    - rid: 1762773924573085735
+      type: {class: TriggerIdentityModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _triggerId: trigger.trigger-01
+        _displayName: Passive Trigger
+    - rid: 1762773924573085736
+      type: {class: TriggerRoutingModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _sourceKind: 2
+        _eventKind: 14
+        _timing: 3
+        _collectionMode: 0
+        _priority: 0
+    - rid: 1762773924573085737
+      type: {class: TriggerActionModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _action:
+          _kind: 9
+          _sourceActor: 1
+          _targetActor: 1
+          _triggeredAbility: {fileID: 0}
+          _effectAsset: {fileID: 0}
+          _effectTag: 
+          _resourceId: 
+          _resourceAmount:
+            _value: 0
+          _tag: state.passive.sample
+          _operationTemplate:
+            _type: 0
+            _resourceId: 
+            _effectAsset: {fileID: 0}
+            _tag: 
+            _amount:
+              _value: 0
+            _cueName: 
+          _magnitudeMultiplier:
+            _value: 1
+          _cueName: 
+          _abilityToCancel: {fileID: 0}
+          _customActionId: 0
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b49b88bf76f46adadb06b37807c7a01, type: 3}
+  m_Name: CombatSystemCatalog
+  m_EditorClassIdentifier: 
+  _randomSeed: 1
+  _worldTags: []
+  _globalTagDefinitions: []
+  _globalResourceDefinitions: []
+  _initialActors: []
+  _abilities:
+  - {fileID: -742644517285375462}
+  _effects:
+  - {fileID: 4234681123636955475}
+  _triggers:
+  - {fileID: -358614391682280683}
+  _actorTemplates: []
+--- !u!114 &4234681123636955475
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 76a551a2fb9243e08a9bc9a215dd5917, type: 3}
+  m_Name: Effect_01
+  m_EditorClassIdentifier: 
+  _modules:
+  - rid: 1762773924573085738
+  - rid: 1762773924573085739
+  - rid: 1762773924573085740
+  references:
+    version: 2
+    RefIds:
+    - rid: 1762773924573085738
+      type: {class: EffectIdentityModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _effectId: effect.effect-01
+    - rid: 1762773924573085739
+      type: {class: EffectResourcePayloadModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _instantResourceDeltas:
+        - _resourceId: health
+          _amount:
+            _value: -10
+        _periodicResourceDeltas: []
+    - rid: 1762773924573085740
+      type: {class: EffectTriggerModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _triggers:
+        - {fileID: -358614391682280683}

@@ -22,6 +22,10 @@ namespace Saber.GAS.Authoring
         [SerializeField]
         private string[] _worldTags = Array.Empty<string>();
         [SerializeField]
+        private CombatTagDefinitionAuthoringData[] _globalTagDefinitions = Array.Empty<CombatTagDefinitionAuthoringData>();
+        [SerializeField]
+        private CombatResourceDefinitionAuthoringData[] _globalResourceDefinitions = Array.Empty<CombatResourceDefinitionAuthoringData>();
+        [SerializeField]
         private CombatActorSpawnAuthoringData[] _initialActors = Array.Empty<CombatActorSpawnAuthoringData>();
 
         [Header("Collected Embedded Definitions")]
@@ -45,6 +49,10 @@ namespace Saber.GAS.Authoring
             SpawnInitialActors(runtime, buildContext);
             return new CombatSystemInstance(this, buildContext, worldState, runtime);
         }
+
+        public IReadOnlyList<CombatTagDefinitionAuthoringData> GlobalTagDefinitions => _globalTagDefinitions;
+
+        public IReadOnlyList<CombatResourceDefinitionAuthoringData> GlobalResourceDefinitions => _globalResourceDefinitions;
 
         /// <summary>
         /// 按当前配置创建一份已经完成定义注册和世界初值写入的世界状态。

@@ -1,161 +1,122 @@
 using System;
+using System.Collections.Generic;
 using Saber.GAS.Abilities;
 using UnityEngine;
 
 namespace Saber.GAS.Authoring
 {
-    /// <summary>
-    /// AbilityDefinition 的 ScriptableObject authoring 入口。
-    /// </summary>
     [CreateAssetMenu(menuName = "Saber.GAS/Ability Definition", fileName = "Ability_")]
     public sealed class AbilityDefinitionAsset : ScriptableObject
     {
-        [Header("Identity")]
-        [SerializeField]
-        private string _abilityId;
-        [SerializeField]
-        private string _displayName;
+        [SerializeReference]
+        private List<AbilityAuthoringModule> _modules = new List<AbilityAuthoringModule>();
 
-        [Header("Activation")]
-        [SerializeField]
-        private AbilityActivationMode _activationMode = AbilityActivationMode.Instant;
-        [SerializeField]
-        private long _castDurationTicks;
-        [SerializeField]
-        private long _activeDurationTicks;
-        [SerializeField]
-        private long _intervalTicks;
-        [SerializeField]
-        private bool _executeEffectsOnActivate = true;
-        [SerializeField]
-        private bool _cancelOnSourceDeath = true;
-        [SerializeField]
-        private bool _autoActivatePassive = true;
+        public IReadOnlyList<AbilityAuthoringModule> Modules
+        {
+            get
+            {
+                EnsureModulesInitialized();
+                return _modules;
+            }
+        }
 
-        [Header("Tags")]
-        [SerializeField]
-        private string[] _abilityTags = Array.Empty<string>();
-        [SerializeField]
-        private string[] _grantedTagsWhileActive = Array.Empty<string>();
-        [SerializeField]
-        private string[] _activationRequiredTags = Array.Empty<string>();
-        [SerializeField]
-        private string[] _activationBlockedTags = Array.Empty<string>();
+        public IReadOnlyList<CombatTagDefinitionAuthoringData> LocalTagDefinitions
+        {
+            get
+            {
+                EnsureModulesInitialized();
+                return GasAuthoringModuleUtility.CollectLocalTagDefinitions(_modules);
+            }
+        }
 
-        [Header("Targeting")]
-        [SerializeField]
-        private AbilityTargetingAuthoringData _targeting = new AbilityTargetingAuthoringData();
+        public bool EnsureModulesInitialized()
+        {
+            _modules ??= new List<AbilityAuthoringModule>();
+            if (_modules.Count > 0)
+            {
+                return false;
+            }
 
-        [Header("Costs & Cooldown")]
-        [SerializeField]
-        private ResourceCostAuthoringData[] _costs = Array.Empty<ResourceCostAuthoringData>();
-        [SerializeField]
-        private long _cooldownTicks;
-        [SerializeField]
-        private string _cooldownTag;
+            _modules.Add(new AbilityIdentityModule());
+            return true;
+        }
 
-        [Header("Payload")]
-        [SerializeField]
-        private EffectDefinitionAsset[] _effects = Array.Empty<EffectDefinitionAsset>();
-        [SerializeField]
-        private EffectDefinitionAsset[] _periodicEffects = Array.Empty<EffectDefinitionAsset>();
-        [SerializeField]
-        private EffectDefinitionAsset[] _endEffects = Array.Empty<EffectDefinitionAsset>();
-        [SerializeField]
-        private TriggerDefinitionAsset[] _triggers = Array.Empty<TriggerDefinitionAsset>();
+        public T GetModule<T>() where T : AbilityAuthoringModule
+        {
+            EnsureModulesInitialized();
+            for (var i = 0; i < _modules.Count; i++)
+            {
+                if (_modules[i] is T typed)
+                {
+                    return typed;
+                }
+            }
+
+            return null;
+        }
+
+        public T GetOrAddModule<T>() where T : AbilityAuthoringModule, new()
+        {
+            var existing = GetModule<T>();
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            var created = new T();
+            _modules.Add(created);
+            return created;
+        }
 
         public AbilityDefinition BuildDefinition(CombatAuthoringBuildContext context = null)
         {
+            EnsureModulesInitialized();
+
             var buildContext = context ?? new CombatAuthoringBuildContext();
-            AbilityDefinition cachedDefinition;
-            if (buildContext.TryGetAbility(this, out cachedDefinition))
+            if (buildContext.TryGetAbility(this, out AbilityDefinition cachedDefinition))
             {
                 return cachedDefinition;
             }
 
-            var abilityDefinition = new AbilityDefinition(
-                CombatAuthoringUtility.RequireAbilityId(_abilityId, name, nameof(_abilityId)))
+            var identity = GetModule<AbilityIdentityModule>();
+            if (identity == null)
             {
-                Name = string.IsNullOrWhiteSpace(_displayName) ? name : _displayName.Trim(),
-                ActivationMode = _activationMode,
-                Cooldown = new AbilityCooldownDefinition(
-                    _cooldownTicks < 0 ? 0 : _cooldownTicks,
-                    CombatAuthoringUtility.OptionalTag(_cooldownTag)),
-                CastDurationTicks = _castDurationTicks < 0 ? 0 : _castDurationTicks,
-                ActiveDurationTicks = _activeDurationTicks < 0 ? 0 : _activeDurationTicks,
-                IntervalTicks = _intervalTicks < 0 ? 0 : _intervalTicks,
-                ExecuteEffectsOnActivate = _executeEffectsOnActivate,
-                CancelOnSourceDeath = _cancelOnSourceDeath,
-                AutoActivatePassive = _autoActivatePassive,
+                throw new InvalidOperationException(string.Format("{0}: 缺少 AbilityIdentityModule。", name));
+            }
+
+            var abilityDefinition = new AbilityDefinition(identity.BuildId(name))
+            {
+                Name = identity.ResolveDisplayName(name),
+                ActivationMode = AbilityActivationMode.Instant,
+                Cooldown = new AbilityCooldownDefinition(0, CombatAuthoringUtility.OptionalTag(null)),
+                CastDurationTicks = 0,
+                ActiveDurationTicks = 0,
+                IntervalTicks = 0,
+                ExecuteEffectsOnActivate = true,
+                CancelOnSourceDeath = true,
+                AutoActivatePassive = true,
             };
             buildContext.Cache(this, abilityDefinition);
 
-            CombatAuthoringUtility.AddTags(abilityDefinition.AbilityTags, _abilityTags);
-            CombatAuthoringUtility.AddTags(abilityDefinition.GrantedTagsWhileActive, _grantedTagsWhileActive);
-            CombatAuthoringUtility.AddTags(abilityDefinition.ActivationRequiredTags, _activationRequiredTags);
-            CombatAuthoringUtility.AddTags(abilityDefinition.ActivationBlockedTags, _activationBlockedTags);
-
-            if (_targeting != null)
+            for (var i = 0; i < _modules.Count; i++)
             {
-                _targeting.ApplyTo(abilityDefinition.Targeting);
-            }
-
-            for (var i = 0; i < _costs.Length; i++)
-            {
-                var cost = _costs[i];
-                if (cost == null)
-                {
-                    continue;
-                }
-
-                abilityDefinition.Costs.Add(cost.Build(name));
-            }
-
-            for (var i = 0; i < _effects.Length; i++)
-            {
-                var effect = _effects[i];
-                if (effect == null)
-                {
-                    continue;
-                }
-
-                abilityDefinition.Effects.Add(buildContext.BuildEffect(effect));
-            }
-
-            for (var i = 0; i < _periodicEffects.Length; i++)
-            {
-                var effect = _periodicEffects[i];
-                if (effect == null)
-                {
-                    continue;
-                }
-
-                abilityDefinition.PeriodicEffects.Add(buildContext.BuildEffect(effect));
-            }
-
-            for (var i = 0; i < _endEffects.Length; i++)
-            {
-                var effect = _endEffects[i];
-                if (effect == null)
-                {
-                    continue;
-                }
-
-                abilityDefinition.EndEffects.Add(buildContext.BuildEffect(effect));
-            }
-
-            for (var i = 0; i < _triggers.Length; i++)
-            {
-                var trigger = _triggers[i];
-                if (trigger == null)
-                {
-                    continue;
-                }
-
-                abilityDefinition.Triggers.Add(buildContext.BuildTrigger(trigger));
+                _modules[i]?.ApplyTo(abilityDefinition, this, buildContext);
             }
 
             return abilityDefinition;
+        }
+
+        private void Reset()
+        {
+            _modules = new List<AbilityAuthoringModule>
+            {
+                new AbilityIdentityModule(),
+            };
+        }
+
+        private void OnEnable()
+        {
+            _modules ??= new List<AbilityAuthoringModule>();
         }
     }
 }

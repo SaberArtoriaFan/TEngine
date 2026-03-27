@@ -1,0 +1,205 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &-2397334114238053281
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 76a551a2fb9243e08a9bc9a215dd5917, type: 3}
+  m_Name: Effect_BattleFocus
+  m_EditorClassIdentifier: 
+  _modules:
+  - rid: 1762773924573085698
+  references:
+    version: 2
+    RefIds:
+    - rid: 1762773924573085698
+      type: {class: EffectIdentityModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _effectId: 
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b49b88bf76f46adadb06b37807c7a01, type: 3}
+  m_Name: GASWorkbenchSample 2
+  m_EditorClassIdentifier: 
+  _randomSeed: 20260326
+  _worldTags:
+  - sample.workbench
+  - combat.demo
+  _globalTagDefinitions:
+  - _tag: sample.workbench
+    _group: Sample
+    _usage: 1
+    _note: "\u793A\u4F8B Catalog \u7684\u6839\u6807\u7B7E\u3002"
+  - _tag: combat.demo
+    _group: Sample
+    _usage: 1
+    _note: "\u7528\u4E8E\u6807\u8BB0\u5F53\u524D\u6F14\u793A\u573A\u666F\u3002"
+  - _tag: unit.player
+    _group: Actor
+    _usage: 18
+    _note: "\u73A9\u5BB6\u5355\u4F4D\u5E38\u7528\u6807\u7B7E\u3002"
+  - _tag: class.mage
+    _group: Actor
+    _usage: 2
+    _note: "\u6CD5\u5E08\u804C\u4E1A\u793A\u4F8B\u6807\u7B7E\u3002"
+  - _tag: ability.offense
+    _group: Ability
+    _usage: 4
+    _note: "\u8FDB\u653B\u578B Ability \u7684\u516C\u5171\u6807\u7B7E\u3002"
+  - _tag: cooldown.firebolt
+    _group: Ability
+    _usage: 4
+    _note: "FireBolt \u7684\u51B7\u5374\u6807\u7B7E\u3002"
+  - _tag: effect.buff
+    _group: Effect
+    _usage: 8
+    _note: "Buff \u7C7B\u6548\u679C\u7684\u516C\u5171\u6807\u7B7E\u3002"
+  - _tag: state.focused
+    _group: State
+    _usage: 24
+    _note: "\u4E13\u6CE8\u72B6\u6001\uFF0C\u5E38\u88AB\u6548\u679C\u4E0E\u89E6\u53D1\u5668\u5171\u540C\u5F15\u7528\u3002"
+  _globalResourceDefinitions:
+  - _resourceId: health
+    _group: Combat
+    _note: "\u751F\u547D\u503C\uFF0C\u4F24\u5BB3\u548C\u6CBB\u7597\u6700\u5E38\u7528\u7684\u8D44\u6E90\u3002"
+  - _resourceId: mana
+    _group: Combat
+    _note: "\u6CD5\u529B\u503C\uFF0C\u7528\u4E8E\u65BD\u6CD5\u6D88\u8017\u6F14\u793A\u3002"
+  _initialActors:
+  - _enabled: 1
+    _template: {fileID: 1200030639231876275}
+    _actorIdOverride: actor.sample.hero.spawned
+    _teamIdOverride: player
+    _overridePosition: 1
+    _positionOverride:
+      _x: 0
+      _y: 0
+      _z: 0
+  _abilities:
+  - {fileID: 4420791960809894308}
+  _effects:
+  - {fileID: 2631757894290418985}
+  - {fileID: -2397334114238053281}
+  _triggers:
+  - {fileID: 4635696637184560395}
+  _actorTemplates:
+  - {fileID: 1200030639231876275}
+--- !u!114 &1200030639231876275
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d9f231eb61a049a5bbe101819115bde3, type: 3}
+  m_Name: ActorTemplate_Hero
+  m_EditorClassIdentifier: 
+  _defaultActorId: actor.sample.hero
+  _defaultTeamId: player
+  _defaultPosition:
+    _x: 0
+    _y: 0
+    _z: 0
+  _initialTags:
+  - unit.player
+  - sample.hero
+  - class.mage
+  _attributes: []
+  _resources:
+  - _resourceId: health
+    _current:
+      _value: 100
+    _max:
+      _value: 100
+    _regenPerTick:
+      _value: 0
+  - _resourceId: mana
+    _current:
+      _value: 60
+    _max:
+      _value: 60
+    _regenPerTick:
+      _value: 0
+  _grantedAbilities:
+  - {fileID: 4420791960809894308}
+  _actorTriggers:
+  - {fileID: 4635696637184560395}
+--- !u!114 &2631757894290418985
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 76a551a2fb9243e08a9bc9a215dd5917, type: 3}
+  m_Name: Effect_01
+  m_EditorClassIdentifier: 
+  _modules:
+  - rid: 1762773924573085696
+  references:
+    version: 2
+    RefIds:
+    - rid: 1762773924573085696
+      type: {class: EffectIdentityModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _effectId: 
+--- !u!114 &4420791960809894308
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b57df84526e459aa5876ae94817bbb4, type: 3}
+  m_Name: Ability_FireBolt
+  m_EditorClassIdentifier: 
+  _modules:
+  - rid: 1762773924573085697
+  references:
+    version: 2
+    RefIds:
+    - rid: 1762773924573085697
+      type: {class: AbilityIdentityModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _abilityId: 
+        _displayName: 
+--- !u!114 &4635696637184560395
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 151765e87c70434c80e36939c7007d39, type: 3}
+  m_Name: Trigger_BattleFocusPulse
+  m_EditorClassIdentifier: 
+  _modules:
+  - rid: 1762773924573085699
+  references:
+    version: 2
+    RefIds:
+    - rid: 1762773924573085699
+      type: {class: TriggerIdentityModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _triggerId: 
+        _displayName: 

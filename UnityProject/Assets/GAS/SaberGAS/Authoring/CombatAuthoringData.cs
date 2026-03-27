@@ -199,6 +199,28 @@ namespace Saber.GAS.Authoring
         [SerializeField]
         private FixedPointValue _amount;
 
+        public ResourceCostAuthoringData()
+        {
+        }
+
+        public ResourceCostAuthoringData(string resourceId, FixedPointValue amount)
+        {
+            _resourceId = resourceId;
+            _amount = amount;
+        }
+
+        public string ResourceId
+        {
+            get => _resourceId;
+            set => _resourceId = value;
+        }
+
+        public FixedPointValue Amount
+        {
+            get => _amount;
+            set => _amount = value;
+        }
+
         public ResourceCost Build(string ownerName)
         {
             return new ResourceCost(
@@ -214,6 +236,28 @@ namespace Saber.GAS.Authoring
         private string _resourceId;
         [SerializeField]
         private FixedPointValue _amount;
+
+        public ResourceDeltaAuthoringData()
+        {
+        }
+
+        public ResourceDeltaAuthoringData(string resourceId, FixedPointValue amount)
+        {
+            _resourceId = resourceId;
+            _amount = amount;
+        }
+
+        public string ResourceId
+        {
+            get => _resourceId;
+            set => _resourceId = value;
+        }
+
+        public FixedPointValue Amount
+        {
+            get => _amount;
+            set => _amount = value;
+        }
 
         public ResourceDeltaDefinition Build(string ownerName)
         {
@@ -295,6 +339,17 @@ namespace Saber.GAS.Authoring
         [SerializeField]
         private string[] _blockedTargetTags = Array.Empty<string>();
 
+        public bool IsEmpty()
+        {
+            return _kind == AbilityTargetKind.None &&
+                _allowedFlags == AbilityTargetFlags.None &&
+                _maxRange.Value == 0f &&
+                (_requiredSourceTags == null || _requiredSourceTags.Length == 0) &&
+                (_requiredTargetTags == null || _requiredTargetTags.Length == 0) &&
+                (_blockedSourceTags == null || _blockedSourceTags.Length == 0) &&
+                (_blockedTargetTags == null || _blockedTargetTags.Length == 0);
+        }
+
         public void ApplyTo(AbilityTargetingDefinition targeting)
         {
             if (targeting == null)
@@ -321,6 +376,13 @@ namespace Saber.GAS.Authoring
         private FixedPointValue _value;
         [SerializeField]
         private TriggerThresholdDirection _direction = TriggerThresholdDirection.None;
+
+        public bool IsEmpty()
+        {
+            return string.IsNullOrWhiteSpace(_resourceId) &&
+                _value.Value == 0f &&
+                _direction == TriggerThresholdDirection.None;
+        }
 
         public void ApplyTo(TriggerThresholdDefinition threshold, string ownerName)
         {
@@ -352,6 +414,16 @@ namespace Saber.GAS.Authoring
         private FixedPointValue _amount;
         [SerializeField]
         private string _cueName;
+
+        public bool IsEmpty()
+        {
+            return _type == CombatImpactOperationType.ResourceDelta &&
+                string.IsNullOrWhiteSpace(_resourceId) &&
+                _effectAsset == null &&
+                string.IsNullOrWhiteSpace(_tag) &&
+                _amount.Value == 0f &&
+                string.IsNullOrWhiteSpace(_cueName);
+        }
 
         public CombatImpactOperation Build(CombatAuthoringBuildContext context, string ownerName)
         {
@@ -415,6 +487,108 @@ namespace Saber.GAS.Authoring
         [SerializeField]
         private int _customActionId;
 
+        public TriggerActionKind Kind
+        {
+            get => _kind;
+            set => _kind = value;
+        }
+
+        public AbilityDefinitionAsset TriggeredAbility
+        {
+            get => _triggeredAbility;
+            set => _triggeredAbility = value;
+        }
+
+        public EffectDefinitionAsset EffectAsset
+        {
+            get => _effectAsset;
+            set => _effectAsset = value;
+        }
+
+        public string EffectTag
+        {
+            get => _effectTag;
+            set => _effectTag = value;
+        }
+
+        public string ResourceId
+        {
+            get => _resourceId;
+            set => _resourceId = value;
+        }
+
+        public TriggerActorReference SourceActor
+        {
+            get => _sourceActor;
+            set => _sourceActor = value;
+        }
+
+        public TriggerActorReference TargetActor
+        {
+            get => _targetActor;
+            set => _targetActor = value;
+        }
+
+        public FixedPointValue ResourceAmount
+        {
+            get => _resourceAmount;
+            set => _resourceAmount = value;
+        }
+
+        public string Tag
+        {
+            get => _tag;
+            set => _tag = value;
+        }
+
+        public string CueName
+        {
+            get => _cueName;
+            set => _cueName = value;
+        }
+
+        public AbilityDefinitionAsset AbilityToCancel
+        {
+            get => _abilityToCancel;
+            set => _abilityToCancel = value;
+        }
+
+        public CombatImpactOperationAuthoringData OperationTemplate
+        {
+            get => _operationTemplate;
+            set => _operationTemplate = value;
+        }
+
+        public FixedPointValue MagnitudeMultiplier
+        {
+            get => _magnitudeMultiplier;
+            set => _magnitudeMultiplier = value;
+        }
+
+        public int CustomActionId
+        {
+            get => _customActionId;
+            set => _customActionId = value;
+        }
+
+        public bool IsEmpty()
+        {
+            return _kind == TriggerActionKind.None &&
+                _sourceActor == TriggerActorReference.Owner &&
+                _targetActor == TriggerActorReference.None &&
+                _triggeredAbility == null &&
+                _effectAsset == null &&
+                string.IsNullOrWhiteSpace(_effectTag) &&
+                string.IsNullOrWhiteSpace(_resourceId) &&
+                _resourceAmount.Value == 0f &&
+                string.IsNullOrWhiteSpace(_tag) &&
+                (_operationTemplate == null || _operationTemplate.IsEmpty()) &&
+                _magnitudeMultiplier.Value == 1f &&
+                string.IsNullOrWhiteSpace(_cueName) &&
+                _abilityToCancel == null &&
+                _customActionId == 0;
+        }
+
         public void ApplyTo(TriggerActionDefinition action, CombatAuthoringBuildContext context, string ownerName)
         {
             if (action == null)
@@ -427,7 +601,7 @@ namespace Saber.GAS.Authoring
             action.TargetActor = _targetActor;
             action.EffectTag = CombatAuthoringUtility.OptionalTag(_effectTag);
             action.ResourceId = string.IsNullOrWhiteSpace(_resourceId)
-                ? ResourceId.Empty
+                ? global::Saber.GAS.Foundation.ResourceId.Empty
                 : CombatAuthoringUtility.RequireResourceId(_resourceId, ownerName, nameof(_resourceId));
             action.ResourceAmount = _resourceAmount.ToFixedPoint();
             action.Tag = CombatAuthoringUtility.OptionalTag(_tag);

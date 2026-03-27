@@ -1,0 +1,19 @@
+{
+    "name": "Saber.GAS.Editor",
+    "rootNamespace": "Saber.GAS.Editor",
+    "references": [
+        "Saber.GAS.Authoring",
+        "Saber.GAS"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
