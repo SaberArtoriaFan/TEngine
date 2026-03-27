@@ -166,6 +166,8 @@ namespace Saber.GAS.Runtime
 
         void OnEffectRemoving(CombatActorState targetActor, ActiveEffect activeEffect, CombatRuntime runtime);
 
+        void OnTick(CombatRuntime runtime);
+
         void ProcessResourceDelta(CombatResourceDeltaContext context);
     }
 

@@ -14,13 +14,19 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _modules:
   - rid: 1762773924573085700
+  - rid: 1762773943797940229
   references:
     version: 2
     RefIds:
     - rid: 1762773924573085700
       type: {class: EffectIdentityModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
       data:
-        _effectId: 
+        _effectId: effect.effect-01
+    - rid: 1762773943797940229
+      type: {class: EffectTriggerModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _triggers:
+        - {fileID: -686574358186965371}
 --- !u!114 &-8049769935715679321
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -201,5 +207,5 @@ MonoBehaviour:
     - rid: 1762773924573085701
       type: {class: AbilityIdentityModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
       data:
-        _abilityId: 
+        _abilityId: ability.ability-firebolt
         _displayName: 

@@ -6,6 +6,7 @@ using Saber.GAS.Attributes;
 using Saber.GAS.Effects;
 using Saber.GAS.Foundation;
 using Saber.GAS.Pooling;
+using Saber.GAS.Projectiles;
 using Saber.GAS.Tags;
 using Saber.GAS.Triggers;
 
@@ -145,6 +146,11 @@ namespace Saber.GAS.Runtime
         /// 向 Trigger 系统投递一次结算上下文。
         /// 这是 Runtime 与 CombatTriggerProcessor 之间的统一入口。
         /// </summary>
+        internal void PublishEvent(CombatEventKind kind, ActorId actorId, string message)
+        {
+            _eventSink.Publish(new CombatEvent(kind, actorId, message));
+        }
+
         public void RaiseTriggerEvent(CombatTriggerContext context)
         {
             if (context == null)
@@ -375,6 +381,7 @@ namespace Saber.GAS.Runtime
                 ReleaseActor(actor);
             }
 
+            ReleaseProjectiles();
             WorldState.ClearActors();
             ReleaseGlobalTriggers();
             _pools.Reset();
@@ -477,6 +484,8 @@ namespace Saber.GAS.Runtime
             {
                 actor.Resources.RegenerateAll();
             }
+
+            RunRuleModulesOnTick();
 
             foreach (var actor in WorldState.Actors)
             {
@@ -1034,75 +1043,253 @@ namespace Saber.GAS.Runtime
                 return;
             }
 
+            var targetPoint = attempt?.Request?.TargetData?.TargetPoint;
+            var hasActorTargets = targets != null && targets.Count > 0;
+
             // The pipeline intentionally materializes impacts first and resolves them later.
             // This keeps mutation / blocking / replay hooks operating on a stable data model.
-            for (var targetIndex = 0; targetIndex < targets.Count; targetIndex++)
+            for (var targetIndex = 0; hasActorTargets && targetIndex < targets.Count; targetIndex++)
             {
                 var target = targets[targetIndex];
 
                 for (var effectIndex = 0; effectIndex < effects.Count; effectIndex++)
                 {
                     var effectDefinition = effects[effectIndex];
-                    if (!CanApplyEffectToTarget(target, effectDefinition))
+                    var impact = BuildEffectImpact(
+                        sourceActor == null ? ActorId.Empty : sourceActor.ActorId,
+                        ability,
+                        target,
+                        target == null ? ActorId.Empty : target.ActorId,
+                        targetPoint,
+                        effectDefinition,
+                        stage,
+                        1);
+                    if (impact == null)
                     {
                         continue;
                     }
 
-                    var impact = new CombatImpact(sourceActor.ActorId, target.ActorId, ability.Id, WorldState.CurrentTick, stage)
-                    {
-                        EffectId = effectDefinition.Id,
-                    };
-                    impact.Tags.AddRange(ability.AbilityTags);
-                    impact.Tags.AddRange(effectDefinition.EffectTags);
-
-                    foreach (var tag in effectDefinition.RemovedTargetEffectTags)
-                    {
-                        impact.Operations.Add(new CombatImpactOperation
-                        {
-                            Type = CombatImpactOperationType.RemoveEffectsByTag,
-                            Tag = tag,
-                        });
-                    }
-
-                    for (var removedEffectIndex = 0; removedEffectIndex < effectDefinition.RemovedTargetEffectIds.Count; removedEffectIndex++)
-                    {
-                        impact.Operations.Add(new CombatImpactOperation
-                        {
-                            Type = CombatImpactOperationType.RemoveEffectById,
-                            EffectId = effectDefinition.RemovedTargetEffectIds[removedEffectIndex],
-                        });
-                    }
-
-                    for (var deltaIndex = 0; deltaIndex < effectDefinition.InstantResourceDeltas.Count; deltaIndex++)
-                    {
-                        var delta = effectDefinition.InstantResourceDeltas[deltaIndex];
-                        impact.Operations.Add(new CombatImpactOperation
-                        {
-                            Type = CombatImpactOperationType.ResourceDelta,
-                            ResourceId = delta.ResourceId,
-                            Amount = delta.Amount,
-                        });
-                    }
-
-                    if (effectDefinition.DurationPolicy != EffectDurationPolicy.Instant ||
-                        effectDefinition.AttributeModifiers.Count > 0 ||
-                        effectDefinition.PeriodicResourceDeltas.Count > 0 ||
-                        effectDefinition.GrantedTags.Count > 0 ||
-                        HasRuntimeEffectPayload(effectDefinition))
-                    {
-                        impact.Operations.Add(new CombatImpactOperation
-                        {
-                            Type = CombatImpactOperationType.ApplyEffect,
-                            EffectSpec = new EffectSpec(effectDefinition, sourceActor.ActorId, target.ActorId, WorldState.CurrentTick),
-                        });
-                    }
-
-                    if (impact.Operations.Count > 0)
-                    {
-                        attempt.Impacts.Add(impact);
-                    }
+                    attempt.Impacts.Add(impact);
                 }
             }
+
+            if (hasActorTargets || !targetPoint.HasValue)
+            {
+                return;
+            }
+
+            for (var effectIndex = 0; effectIndex < effects.Count; effectIndex++)
+            {
+                var effectDefinition = effects[effectIndex];
+                var impact = BuildEffectImpact(
+                    sourceActor == null ? ActorId.Empty : sourceActor.ActorId,
+                    ability,
+                    null,
+                    ActorId.Empty,
+                    targetPoint,
+                    effectDefinition,
+                    stage,
+                    1);
+                if (impact != null)
+                {
+                    attempt.Impacts.Add(impact);
+                }
+            }
+        }
+
+        private CombatImpact BuildEffectImpact(
+            ActorId sourceActorId,
+            AbilityDefinition ability,
+            CombatActorState targetActor,
+            ActorId targetActorId,
+            WorldPosition? targetPoint,
+            EffectDefinition effectDefinition,
+            ActionExecutionStage stage,
+            int effectStacks)
+        {
+            if (effectDefinition == null)
+            {
+                return null;
+            }
+
+            if (targetActor != null && !CanApplyEffectToTarget(targetActor, effectDefinition))
+            {
+                return null;
+            }
+
+            var impact = new CombatImpact(
+                sourceActorId,
+                targetActorId,
+                ability == null ? AbilityId.Empty : ability.Id,
+                WorldState.CurrentTick,
+                stage)
+            {
+                EffectId = effectDefinition.Id,
+            };
+
+            if (ability != null)
+            {
+                impact.Tags.AddRange(ability.AbilityTags);
+            }
+
+            impact.Tags.AddRange(effectDefinition.EffectTags);
+            BuildImpactOperationsInto(
+                impact,
+                sourceActorId,
+                targetActor != null,
+                targetActorId,
+                targetPoint,
+                effectDefinition,
+                effectStacks);
+
+            return impact.Operations.Count > 0 ? impact : null;
+        }
+
+        private void BuildImpactOperationsInto(
+            CombatImpact impact,
+            ActorId sourceActorId,
+            bool hasActorTarget,
+            ActorId targetActorId,
+            WorldPosition? targetPoint,
+            EffectDefinition effectDefinition,
+            int effectStacks)
+        {
+            if (impact == null || effectDefinition == null)
+            {
+                return;
+            }
+
+            if (hasActorTarget)
+            {
+                foreach (var tag in effectDefinition.RemovedTargetEffectTags)
+                {
+                    impact.Operations.Add(new CombatImpactOperation
+                    {
+                        Type = CombatImpactOperationType.RemoveEffectsByTag,
+                        Tag = tag,
+                    });
+                }
+
+                for (var removedEffectIndex = 0; removedEffectIndex < effectDefinition.RemovedTargetEffectIds.Count; removedEffectIndex++)
+                {
+                    impact.Operations.Add(new CombatImpactOperation
+                    {
+                        Type = CombatImpactOperationType.RemoveEffectById,
+                        EffectId = effectDefinition.RemovedTargetEffectIds[removedEffectIndex],
+                    });
+                }
+
+                for (var deltaIndex = 0; deltaIndex < effectDefinition.InstantResourceDeltas.Count; deltaIndex++)
+                {
+                    var delta = effectDefinition.InstantResourceDeltas[deltaIndex];
+                    impact.Operations.Add(new CombatImpactOperation
+                    {
+                        Type = CombatImpactOperationType.ResourceDelta,
+                        ResourceId = delta.ResourceId,
+                        Amount = delta.Amount,
+                    });
+                }
+
+                if (effectDefinition.DurationPolicy != EffectDurationPolicy.Instant ||
+                    effectDefinition.AttributeModifiers.Count > 0 ||
+                    effectDefinition.PeriodicResourceDeltas.Count > 0 ||
+                    effectDefinition.GrantedTags.Count > 0 ||
+                    HasRuntimeEffectPayload(effectDefinition))
+                {
+                    impact.Operations.Add(new CombatImpactOperation
+                    {
+                        Type = CombatImpactOperationType.ApplyEffect,
+                        EffectSpec = new EffectSpec(effectDefinition, sourceActorId, targetActorId, WorldState.CurrentTick, effectStacks),
+                    });
+                }
+            }
+
+            for (var operationIndex = 0; operationIndex < effectDefinition.ImpactOperations.Count; operationIndex++)
+            {
+                var contextualized = CloneContextualImpactOperation(
+                    effectDefinition.ImpactOperations[operationIndex],
+                    sourceActorId,
+                    targetActorId,
+                    targetPoint);
+                if (contextualized != null)
+                {
+                    impact.Operations.Add(contextualized);
+                }
+            }
+        }
+
+        private CombatImpactOperation CloneContextualImpactOperation(
+            CombatImpactOperation sourceOperation,
+            ActorId sourceActorId,
+            ActorId targetActorId,
+            WorldPosition? targetPoint)
+        {
+            if (sourceOperation == null)
+            {
+                return null;
+            }
+
+            var clone = new CombatImpactOperation
+            {
+                Type = sourceOperation.Type,
+                ResourceId = sourceOperation.ResourceId,
+                EffectId = sourceOperation.EffectId,
+                Tag = sourceOperation.Tag,
+                Amount = sourceOperation.Amount,
+                CueName = sourceOperation.CueName,
+                Payload = sourceOperation.Payload,
+            };
+
+            if (sourceOperation.EffectSpec != null)
+            {
+                if (targetActorId.IsEmpty)
+                {
+                    return null;
+                }
+
+                clone.EffectSpec = new EffectSpec(
+                    sourceOperation.EffectSpec.Definition,
+                    sourceActorId,
+                    targetActorId,
+                    WorldState.CurrentTick,
+                    sourceOperation.EffectSpec.Stacks);
+            }
+
+            clone.Projectile = CloneProjectileSpawnDefinition(sourceOperation.Projectile, sourceActorId, targetActorId, targetPoint);
+            return clone;
+        }
+
+        private CombatProjectileSpawnDefinition CloneProjectileSpawnDefinition(
+            CombatProjectileSpawnDefinition source,
+            ActorId sourceActorId,
+            ActorId targetActorId,
+            WorldPosition? targetPoint)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            var clone = new CombatProjectileSpawnDefinition
+            {
+                Name = source.Name,
+                TrackingMode = source.TrackingMode,
+                SpeedPerTick = source.SpeedPerTick,
+                HitRadius = source.HitRadius,
+                MaxLifetimeTicks = source.MaxLifetimeTicks,
+            };
+
+            clone.ImpactTags.AddRange(source.ImpactTags);
+            for (var operationIndex = 0; operationIndex < source.ImpactOperations.Count; operationIndex++)
+            {
+                var operation = CloneContextualImpactOperation(source.ImpactOperations[operationIndex], sourceActorId, targetActorId, targetPoint);
+                if (operation != null)
+                {
+                    clone.ImpactOperations.Add(operation);
+                }
+            }
+
+            return clone;
         }
 
         /// <summary>
@@ -2062,6 +2249,14 @@ namespace Saber.GAS.Runtime
             }
         }
 
+        private void RunRuleModulesOnTick()
+        {
+            for (var moduleIndex = 0; moduleIndex < _ruleModules.Count; moduleIndex++)
+            {
+                _ruleModules[moduleIndex].OnTick(this);
+            }
+        }
+
         /// <summary>
         /// 判断某个效果是否需要规则模块创建额外运行时状态。
         /// </summary>
@@ -2550,6 +2745,16 @@ namespace Saber.GAS.Runtime
         /// <summary>
         /// 由 Trigger 系统驱动一次技能激活。
         /// </summary>
+        private void ReleaseProjectiles()
+        {
+            for (var i = WorldState.ProjectileStates.Count - 1; i >= 0; i--)
+            {
+                _pools.Projectiles.Return(WorldState.ProjectileStates[i]);
+            }
+
+            WorldState.ClearProjectiles();
+        }
+
         internal AbilityActivationResult ExecuteTriggeredAbility(
             ActorId sourceActorId,
             AbilityId abilityId,
@@ -2603,7 +2808,141 @@ namespace Saber.GAS.Runtime
                 return;
             }
 
-            ApplyEffectSpec(targetActor, new EffectSpec(effectDefinition, sourceActorId, targetActorId, WorldState.CurrentTick, stacks), null);
+            ResolveEffectImpactDirect(
+                effectDefinition,
+                sourceActorId,
+                targetActorId,
+                targetActor.Position,
+                stacks,
+                null,
+                ActionExecutionStage.Execute);
+        }
+
+        internal void ResolveEffectImpactDirect(
+            EffectDefinition effectDefinition,
+            ActorId sourceActorId,
+            ActorId targetActorId,
+            WorldPosition? targetPoint,
+            int stacks,
+            AbilityDefinition ability,
+            ActionExecutionStage stage)
+        {
+            CombatActorState targetActor = null;
+            if (!targetActorId.IsEmpty)
+            {
+                WorldState.TryGetActor(targetActorId, out targetActor);
+            }
+
+            var impact = BuildEffectImpact(
+                sourceActorId,
+                ability,
+                targetActor,
+                targetActorId,
+                targetPoint,
+                effectDefinition,
+                stage,
+                stacks);
+            ResolveSyntheticImpact(ability, sourceActorId, targetActorId, targetPoint, stage, impact);
+        }
+
+        internal void ResolveImpactOperationsDirect(
+            ActorId sourceActorId,
+            ActorId targetActorId,
+            WorldPosition? targetPoint,
+            AbilityId abilityId,
+            EffectId effectId,
+            ActionExecutionStage stage,
+            GameplayTagContainer tags,
+            IList<CombatImpactOperation> operations)
+        {
+            if (operations == null || operations.Count == 0)
+            {
+                return;
+            }
+
+            AbilityDefinition ability = null;
+            if (!abilityId.IsEmpty)
+            {
+                WorldState.TryGetAbility(abilityId, out ability);
+            }
+
+            var impact = new CombatImpact(sourceActorId, targetActorId, abilityId, WorldState.CurrentTick, stage)
+            {
+                EffectId = effectId,
+            };
+
+            if (tags != null)
+            {
+                impact.Tags.AddRange(tags);
+            }
+
+            for (var operationIndex = 0; operationIndex < operations.Count; operationIndex++)
+            {
+                var operation = CloneContextualImpactOperation(operations[operationIndex], sourceActorId, targetActorId, targetPoint);
+                if (operation != null)
+                {
+                    impact.Operations.Add(operation);
+                }
+            }
+
+            ResolveSyntheticImpact(ability, sourceActorId, targetActorId, targetPoint, stage, impact);
+        }
+
+        internal CombatProjectileState RentProjectileState()
+        {
+            return _pools.Projectiles.Rent();
+        }
+
+        internal void ReturnProjectileState(CombatProjectileState projectile)
+        {
+            _pools.Projectiles.Return(projectile);
+        }
+
+        private void ResolveSyntheticImpact(
+            AbilityDefinition ability,
+            ActorId sourceActorId,
+            ActorId targetActorId,
+            WorldPosition? targetPoint,
+            ActionExecutionStage stage,
+            CombatImpact impact)
+        {
+            if (impact == null || impact.Operations.Count == 0)
+            {
+                return;
+            }
+
+            var targetData = new AbilityTargetData();
+            if (!targetActorId.IsEmpty)
+            {
+                targetData.TargetActorIds.Add(targetActorId);
+            }
+
+            if (targetPoint.HasValue)
+            {
+                targetData.TargetPoint = targetPoint.Value;
+            }
+
+            CombatActorState sourceActor;
+            WorldState.TryGetActor(sourceActorId, out sourceActor);
+
+            var request = new AbilityActivationRequest
+            {
+                SourceActorId = sourceActorId,
+                AbilityId = ability == null ? AbilityId.Empty : ability.Id,
+                TargetData = targetData,
+                RequestTick = WorldState.CurrentTick,
+            };
+            var executionContext = new AbilityExecutionContext(request, ability, WorldState.CurrentTick);
+            var attempt = new CombatActionAttempt(request, sourceActor, ability, executionContext, stage);
+
+            CombatActorState targetActor;
+            if (!targetActorId.IsEmpty && WorldState.TryGetActor(targetActorId, out targetActor))
+            {
+                attempt.Targets.Add(targetActor);
+            }
+
+            attempt.Impacts.Add(impact);
+            ResolveAttemptImpacts(attempt, null);
         }
 
         /// <summary>

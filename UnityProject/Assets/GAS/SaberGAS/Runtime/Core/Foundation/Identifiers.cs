@@ -357,6 +357,83 @@ namespace Saber.GAS.Foundation
     /// <summary>
     /// 效果定义标识。
     /// </summary>
+    /// <summary>
+    /// 运行时投射物实例标识。
+    /// </summary>
+    public struct ProjectileInstanceId : IEquatable<ProjectileInstanceId>
+    {
+        /// <summary>
+        /// 表示空投射物实例标识。
+        /// </summary>
+        public static readonly ProjectileInstanceId Empty = new ProjectileInstanceId(0);
+
+        /// <summary>
+        /// 使用长整型值创建投射物实例标识。
+        /// </summary>
+        public ProjectileInstanceId(long value)
+        {
+            Value = value < 0 ? 0 : value;
+        }
+
+        /// <summary>
+        /// 获取投射物实例标识的原始数值。
+        /// </summary>
+        public long Value { get; }
+
+        /// <summary>
+        /// 判断当前标识是否为空。
+        /// </summary>
+        public bool IsEmpty => Value <= 0;
+
+        /// <summary>
+        /// 比较两个投射物实例标识是否相等。
+        /// </summary>
+        public bool Equals(ProjectileInstanceId other)
+        {
+            return Value == other.Value;
+        }
+
+        /// <summary>
+        /// 比较当前对象与另一个对象是否表示同一个投射物实例标识。
+        /// </summary>
+        public override bool Equals(object obj)
+        {
+            return obj is ProjectileInstanceId other && Equals(other);
+        }
+
+        /// <summary>
+        /// 计算投射物实例标识的哈希值。
+        /// </summary>
+        public override int GetHashCode()
+        {
+            return Value.GetHashCode();
+        }
+
+        /// <summary>
+        /// 返回投射物实例标识的字符串形式。
+        /// </summary>
+        public override string ToString()
+        {
+            return Value.ToString();
+        }
+
+        /// <summary>
+        /// 比较两个投射物实例标识是否相等。
+        /// </summary>
+        public static bool operator ==(ProjectileInstanceId left, ProjectileInstanceId right)
+        {
+            return left.Equals(right);
+        }
+
+        /// <summary>
+        /// 比较两个投射物实例标识是否不相等。
+        /// </summary>
+        public static bool operator !=(ProjectileInstanceId left, ProjectileInstanceId right)
+        {
+            return !left.Equals(right);
+        }
+    }
+
     public struct EffectId : IEquatable<EffectId>
     {
         /// <summary>

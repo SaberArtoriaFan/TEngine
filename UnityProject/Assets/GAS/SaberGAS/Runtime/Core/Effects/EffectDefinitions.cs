@@ -3,6 +3,7 @@ using FastCloner.SourceGenerator.Shared;
 using Herta;
 using Saber.GAS.Attributes;
 using Saber.GAS.Foundation;
+using Saber.GAS.Runtime;
 using Saber.GAS.Tags;
 using Saber.GAS.Triggers;
 
@@ -128,6 +129,7 @@ namespace Saber.GAS.Effects
             AttributeModifiers = new List<AttributeModifierDefinition>();
             InstantResourceDeltas = new List<ResourceDeltaDefinition>();
             PeriodicResourceDeltas = new List<ResourceDeltaDefinition>();
+            ImpactOperations = new List<CombatImpactOperation>();
             Extensions = new List<ICombatEffectExtensionDefinition>();
             Triggers = new List<TriggerDefinition>();
             MaxStacks = 1;
@@ -193,6 +195,8 @@ namespace Saber.GAS.Effects
         /// 获取周期资源变化列表。
         /// </summary>
         public IList<ResourceDeltaDefinition> PeriodicResourceDeltas { get; internal set; }
+
+        public IList<CombatImpactOperation> ImpactOperations { get; internal set; }
 
         /// <summary>
         /// 获取效果扩展定义列表。

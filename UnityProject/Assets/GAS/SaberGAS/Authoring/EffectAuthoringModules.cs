@@ -2,8 +2,9 @@ using System;
 using System.Collections.Generic;
 using Saber.GAS.Effects;
 using Saber.GAS.Foundation;
-using Saber.GAS.Semantics;
 using Saber.GAS.Resources;
+using Saber.GAS.Runtime;
+using Saber.GAS.Semantics;
 using UnityEngine;
 
 namespace Saber.GAS.Authoring
@@ -308,10 +309,49 @@ namespace Saber.GAS.Authoring
         }
     }
 
-    [Serializable, GasAuthoringModule("护盾语义", 60)]
+    [Serializable, GasAuthoringModule("\u6295\u5c04\u7269\u8f7d\u8377", 55)]
+    public sealed class EffectProjectilePayloadModule : EffectAuthoringModule
+    {
+        [SerializeField, InspectorName("\u6295\u5c04\u7269\u5b9a\u4e49")]
+        private ProjectileSpawnAuthoringData[] _projectiles = Array.Empty<ProjectileSpawnAuthoringData>();
+
+        public ProjectileSpawnAuthoringData[] Projectiles
+        {
+            get => _projectiles;
+            set => _projectiles = value ?? Array.Empty<ProjectileSpawnAuthoringData>();
+        }
+
+        public override void ApplyTo(
+            EffectDefinition definition,
+            EffectDefinitionAsset owner,
+            CombatAuthoringBuildContext context)
+        {
+            if (definition == null)
+            {
+                return;
+            }
+
+            for (var i = 0; i < _projectiles.Length; i++)
+            {
+                var projectile = _projectiles[i];
+                if (projectile == null)
+                {
+                    continue;
+                }
+
+                definition.ImpactOperations.Add(new CombatImpactOperation
+                {
+                    Type = CombatImpactOperationType.SpawnProjectile,
+                    Projectile = projectile.Build(context, string.Format("{0}.Projectile[{1}]", owner == null ? string.Empty : owner.name, i)),
+                });
+            }
+        }
+    }
+
+    [Serializable, GasAuthoringModule("\u62a4\u76fe\u8bed\u4e49", 60)]
     public sealed class EffectShieldPayloadModule : EffectAuthoringModule
     {
-        [SerializeField, InspectorName("护盾语义")]
+        [SerializeField, InspectorName("\u62a4\u76fe\u8bed\u4e49")]
         private ShieldSemanticAuthoringData[] _shieldSemantics = Array.Empty<ShieldSemanticAuthoringData>();
 
         public ShieldSemanticAuthoringData[] ShieldSemantics

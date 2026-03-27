@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Saber.GAS.Authoring;
 using Saber.GAS.Triggers;
@@ -6,6 +7,25 @@ namespace Saber.GAS.Editor
 {
     internal static class GasAuthoringValidationUtility
     {
+        public static string GetEffectBuildIssue(EffectDefinitionAsset effectAsset)
+        {
+            if (effectAsset == null)
+            {
+                return null;
+            }
+
+            try
+            {
+                effectAsset.EnsureModulesInitialized();
+                effectAsset.BuildDefinition(new CombatAuthoringBuildContext());
+                return null;
+            }
+            catch (Exception exception)
+            {
+                return exception.Message;
+            }
+        }
+
         public static string GetTriggerActionIssue(TriggerDefinitionAsset triggerAsset)
         {
             if (triggerAsset == null)
@@ -72,31 +92,56 @@ namespace Saber.GAS.Editor
                 return issues;
             }
 
+            var buildContext = new CombatAuthoringBuildContext();
+
             var abilities = GasEditorUtility.GetEmbeddedAssets<AbilityDefinitionAsset>(catalog);
             for (var i = 0; i < abilities.Length; i++)
             {
-                abilities[i].EnsureModulesInitialized();
-                var identity = abilities[i].GetModule<AbilityIdentityModule>();
+                var ability = abilities[i];
+                if (ability == null)
+                {
+                    continue;
+                }
+
+                ability.EnsureModulesInitialized();
+                var identity = ability.GetModule<AbilityIdentityModule>();
                 if (identity == null || string.IsNullOrWhiteSpace(identity.AbilityId))
                 {
-                    issues.Add(string.Format("{0}: AbilityId 不能为空。", abilities[i].name));
+                    issues.Add(string.Format("{0}: AbilityId 不能为空。", ability.name));
+                    continue;
                 }
+
+                TryBuild(() => buildContext.BuildAbility(ability), ability.name, issues);
             }
 
             var effects = GasEditorUtility.GetEmbeddedAssets<EffectDefinitionAsset>(catalog);
             for (var i = 0; i < effects.Length; i++)
             {
-                effects[i].EnsureModulesInitialized();
-                var identity = effects[i].GetModule<EffectIdentityModule>();
+                var effect = effects[i];
+                if (effect == null)
+                {
+                    continue;
+                }
+
+                effect.EnsureModulesInitialized();
+                var identity = effect.GetModule<EffectIdentityModule>();
                 if (identity == null || string.IsNullOrWhiteSpace(identity.EffectId))
                 {
-                    issues.Add(string.Format("{0}: EffectId 不能为空。", effects[i].name));
+                    issues.Add(string.Format("{0}: EffectId 不能为空。", effect.name));
+                    continue;
                 }
+
+                TryBuild(() => buildContext.BuildEffect(effect), effect.name, issues);
             }
 
             var actorTemplates = GasEditorUtility.GetEmbeddedAssets<CombatActorTemplateAsset>(catalog);
             for (var i = 0; i < actorTemplates.Length; i++)
             {
+                if (actorTemplates[i] == null)
+                {
+                    continue;
+                }
+
                 var serializedObject = new UnityEditor.SerializedObject(actorTemplates[i]);
                 var issue = GasEditorUtility.GetRequiredStringIssue(serializedObject.FindProperty("_defaultActorId"), "DefaultActorId");
                 if (!string.IsNullOrWhiteSpace(issue))
@@ -108,21 +153,47 @@ namespace Saber.GAS.Editor
             var triggers = GasEditorUtility.GetEmbeddedAssets<TriggerDefinitionAsset>(catalog);
             for (var i = 0; i < triggers.Length; i++)
             {
-                triggers[i].EnsureModulesInitialized();
-                var identity = triggers[i].GetModule<TriggerIdentityModule>();
-                if (identity == null || string.IsNullOrWhiteSpace(identity.TriggerId))
+                var trigger = triggers[i];
+                if (trigger == null)
                 {
-                    issues.Add(string.Format("{0}: TriggerId 不能为空。", triggers[i].name));
+                    continue;
                 }
 
-                var actionIssue = GetTriggerActionIssue(triggers[i]);
+                trigger.EnsureModulesInitialized();
+                var identity = trigger.GetModule<TriggerIdentityModule>();
+                if (identity == null || string.IsNullOrWhiteSpace(identity.TriggerId))
+                {
+                    issues.Add(string.Format("{0}: TriggerId 不能为空。", trigger.name));
+                    continue;
+                }
+
+                var actionIssue = GetTriggerActionIssue(trigger);
                 if (!string.IsNullOrWhiteSpace(actionIssue))
                 {
-                    issues.Add(string.Format("{0}: {1}", triggers[i].name, actionIssue));
+                    issues.Add(string.Format("{0}: {1}", trigger.name, actionIssue));
                 }
+
+                TryBuild(() => buildContext.BuildTrigger(trigger), trigger.name, issues);
             }
 
             return issues;
+        }
+
+        private static void TryBuild(Action buildAction, string assetName, ICollection<string> issues)
+        {
+            if (buildAction == null)
+            {
+                return;
+            }
+
+            try
+            {
+                buildAction();
+            }
+            catch (Exception exception)
+            {
+                issues.Add(string.Format("{0}: {1}", assetName, exception.Message));
+            }
         }
     }
 }

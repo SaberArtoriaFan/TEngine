@@ -4,6 +4,7 @@ using Saber.GAS.Abilities;
 using Saber.GAS.Attributes;
 using Saber.GAS.Effects;
 using Saber.GAS.Foundation;
+using Saber.GAS.Projectiles;
 using Saber.GAS.Resources;
 using Saber.GAS.Runtime;
 using Saber.GAS.Semantics;
@@ -433,6 +434,12 @@ namespace Saber.GAS.Authoring
                     string.Format("{0}: AddImpactOperation 当前不支持直接配置 ApplyEffect，请改用 TriggerActionKind.ApplyEffect。", ownerName));
             }
 
+            if (_type == CombatImpactOperationType.SpawnProjectile)
+            {
+                throw new InvalidOperationException(
+                    string.Format("{0}: SpawnProjectile 请改在 EffectProjectilePayloadModule 里配置。", ownerName));
+            }
+
             var operation = new CombatImpactOperation
             {
                 Type = _type,
@@ -452,6 +459,60 @@ namespace Saber.GAS.Authoring
 
             operation.Tag = CombatAuthoringUtility.OptionalTag(_tag);
             return operation;
+        }
+    }
+
+    [Serializable]
+    public sealed class ProjectileSpawnAuthoringData
+    {
+        [SerializeField]
+        private string _name;
+        [SerializeField]
+        private CombatProjectileTrackingMode _trackingMode = CombatProjectileTrackingMode.FixedPoint;
+        [SerializeField]
+        private FixedPointValue _speedPerTick = new FixedPointValue(1f);
+        [SerializeField]
+        private FixedPointValue _hitRadius;
+        [SerializeField]
+        private long _maxLifetimeTicks = 30;
+        [SerializeField]
+        private string[] _impactTags = Array.Empty<string>();
+        [SerializeField]
+        private CombatImpactOperationAuthoringData[] _impactOperations = Array.Empty<CombatImpactOperationAuthoringData>();
+
+        public CombatProjectileSpawnDefinition Build(CombatAuthoringBuildContext context, string ownerName)
+        {
+            var speedPerTick = _speedPerTick.ToFixedPoint();
+            if (speedPerTick <= FP._0)
+            {
+                throw new InvalidOperationException(string.Format("{0}: Projectile speed must be greater than 0.", ownerName));
+            }
+
+            if (_maxLifetimeTicks <= 0)
+            {
+                throw new InvalidOperationException(string.Format("{0}: Projectile lifetime must be greater than 0.", ownerName));
+            }
+
+            var definition = new CombatProjectileSpawnDefinition
+            {
+                Name = string.IsNullOrWhiteSpace(_name) ? null : _name.Trim(),
+                TrackingMode = _trackingMode,
+                SpeedPerTick = speedPerTick,
+                HitRadius = _hitRadius.ToFixedPoint() < FP._0 ? FP._0 : _hitRadius.ToFixedPoint(),
+                MaxLifetimeTicks = _maxLifetimeTicks,
+            };
+
+            CombatAuthoringUtility.AddTags(definition.ImpactTags, _impactTags);
+            for (var i = 0; i < _impactOperations.Length; i++)
+            {
+                var operation = _impactOperations[i];
+                if (operation != null)
+                {
+                    definition.ImpactOperations.Add(operation.Build(context, string.Format("{0}.ProjectileImpact[{1}]", ownerName, i)));
+                }
+            }
+
+            return definition;
         }
     }
 

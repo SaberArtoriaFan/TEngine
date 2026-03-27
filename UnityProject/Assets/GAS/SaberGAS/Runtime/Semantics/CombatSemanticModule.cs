@@ -183,6 +183,10 @@ namespace Saber.GAS.Semantics
         /// <summary>
         /// 处理资源变化的标准语义，例如伤害免疫和护盾吸收。
         /// </summary>
+        public void OnTick(CombatRuntime runtime)
+        {
+        }
+
         public void ProcessResourceDelta(CombatResourceDeltaContext context)
         {
             if (!IsDamageDelta(context))

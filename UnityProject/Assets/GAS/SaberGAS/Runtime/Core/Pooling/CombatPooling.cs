@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Saber.GAS.Abilities;
 using Saber.GAS.Actors;
 using Saber.GAS.Effects;
+using Saber.GAS.Projectiles;
 using Saber.GAS.Triggers;
 
 namespace Saber.GAS.Pooling
@@ -150,6 +151,7 @@ namespace Saber.GAS.Pooling
             ActorStates = new CombatObjectPool<CombatActorState>(() => new CombatActorState());
             ActiveAbilityInstances = new CombatObjectPool<ActiveAbilityInstance>(() => new ActiveAbilityInstance());
             ActiveEffects = new CombatObjectPool<ActiveEffect>(() => new ActiveEffect());
+            Projectiles = new CombatObjectPool<CombatProjectileState>(() => new CombatProjectileState());
             ActiveTriggers = new CombatObjectPool<ActiveTriggerInstance>(() => new ActiveTriggerInstance());
             AbilityTargetDataItems = new CombatObjectPool<AbilityTargetData>(() => new AbilityTargetData());
         }
@@ -169,6 +171,8 @@ namespace Saber.GAS.Pooling
         /// </summary>
         public CombatObjectPool<ActiveEffect> ActiveEffects { get; }
 
+        public CombatObjectPool<CombatProjectileState> Projectiles { get; }
+
         /// <summary>
         /// 获取 Trigger 实例对象池。
         /// </summary>
@@ -187,6 +191,7 @@ namespace Saber.GAS.Pooling
             ActorStates.Reset();
             ActiveAbilityInstances.Reset();
             ActiveEffects.Reset();
+            Projectiles.Reset();
             ActiveTriggers.Reset();
             AbilityTargetDataItems.Reset();
         }

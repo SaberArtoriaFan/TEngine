@@ -28,7 +28,9 @@ namespace Saber.GAS.Editor
             var removalModule = effect.GetModule<EffectRemovalModule>();
             var triggerModule = effect.GetModule<EffectTriggerModule>();
             var resourceModule = effect.GetModule<EffectResourcePayloadModule>();
+            var projectileModule = effect.GetModule<EffectProjectilePayloadModule>();
             var shieldModule = effect.GetModule<EffectShieldPayloadModule>();
+            var buildIssue = GasAuthoringValidationUtility.GetEffectBuildIssue(effect);
 
             GasEditorUtility.DrawInspectorHeader(
                 "Effect 模块容器",
@@ -46,6 +48,11 @@ namespace Saber.GAS.Editor
                     EditorUtility.SetDirty(effect);
                     serializedObject.Update();
                 }
+            }
+
+            if (!string.IsNullOrWhiteSpace(buildIssue))
+            {
+                EditorGUILayout.HelpBox(buildIssue, MessageType.Warning);
             }
 
             GasEditorUtility.DrawSection("概览", "先看当前 Effect 实际挂载了哪些能力块。", () =>

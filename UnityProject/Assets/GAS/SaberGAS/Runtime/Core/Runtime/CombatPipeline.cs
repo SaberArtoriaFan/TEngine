@@ -4,6 +4,7 @@ using Saber.GAS.Abilities;
 using Saber.GAS.Actors;
 using Saber.GAS.Effects;
 using Saber.GAS.Foundation;
+using Saber.GAS.Projectiles;
 using Saber.GAS.Tags;
 
 namespace Saber.GAS.Runtime
@@ -124,6 +125,7 @@ namespace Saber.GAS.Runtime
         /// 发出一个表现 Cue。
         /// </summary>
         Cue = 4,
+        SpawnProjectile = 5,
     }
 
     /// <summary>
@@ -165,6 +167,11 @@ namespace Saber.GAS.Runtime
         /// 获取或设置要发出的表现 Cue 名称。
         /// </summary>
         public string CueName { get; set; }
+
+        /// <summary>
+        /// 获取或设置投射物生成定义。
+        /// </summary>
+        public CombatProjectileSpawnDefinition Projectile { get; set; }
 
         /// <summary>
         /// 获取或设置自定义载荷。

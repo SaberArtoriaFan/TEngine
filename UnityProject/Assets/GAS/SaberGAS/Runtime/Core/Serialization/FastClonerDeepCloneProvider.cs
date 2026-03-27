@@ -5,6 +5,7 @@ using Saber.GAS.Actors;
 using Saber.GAS.Attributes;
 using Saber.GAS.Effects;
 using Saber.GAS.Foundation;
+using Saber.GAS.Projectiles;
 using Saber.GAS.Resources;
 using Saber.GAS.Runtime;
 using Saber.GAS.Tags;
@@ -81,6 +82,7 @@ namespace Saber.GAS.Serialization
             };
 
             clone._nextAbilityInstanceId = source._nextAbilityInstanceId;
+            clone._nextProjectileInstanceId = source._nextProjectileInstanceId;
 
             var abilityDefinitionMap = new Dictionary<AbilityDefinition, AbilityDefinition>();
             var effectDefinitionMap = new Dictionary<EffectDefinition, EffectDefinition>();
@@ -103,6 +105,11 @@ namespace Saber.GAS.Serialization
             foreach (var globalTrigger in source.GlobalTriggers)
             {
                 clone.GlobalTriggers.Add(CloneActiveTriggerInstance(globalTrigger, triggerDefinitionMap, effectDefinitionMap));
+            }
+
+            foreach (var projectile in source.ProjectileStates)
+            {
+                clone.ProjectileStates.Add(CloneProjectileState(projectile, effectDefinitionMap, triggerDefinitionMap));
             }
 
             return clone;
@@ -311,6 +318,11 @@ namespace Saber.GAS.Serialization
             foreach (var delta in source.PeriodicResourceDeltas)
             {
                 clone.PeriodicResourceDeltas.Add(delta);
+            }
+
+            foreach (var operation in source.ImpactOperations)
+            {
+                clone.ImpactOperations.Add(CloneImpactOperation(operation, effectDefinitionMap, triggerDefinitionMap));
             }
 
             foreach (var extension in source.Extensions)
@@ -579,6 +591,7 @@ namespace Saber.GAS.Serialization
                     ? null
                     : CloneEffectSpec(source.EffectSpec, effectDefinitionMap, triggerDefinitionMap),
                 CueName = source.CueName,
+                Projectile = CloneProjectileSpawnDefinition(source.Projectile, effectDefinitionMap, triggerDefinitionMap),
                 Payload = source.Payload,
             };
         }
@@ -586,6 +599,82 @@ namespace Saber.GAS.Serialization
         /// <summary>
         /// 深拷贝一个 Trigger 运行时实例。
         /// </summary>
+        private CombatProjectileSpawnDefinition CloneProjectileSpawnDefinition(
+            CombatProjectileSpawnDefinition source,
+            IDictionary<EffectDefinition, EffectDefinition> effectDefinitionMap,
+            IDictionary<TriggerDefinition, TriggerDefinition> triggerDefinitionMap)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            var clone = new CombatProjectileSpawnDefinition
+            {
+                Name = source.Name,
+                TrackingMode = source.TrackingMode,
+                SpeedPerTick = source.SpeedPerTick,
+                HitRadius = source.HitRadius,
+                MaxLifetimeTicks = source.MaxLifetimeTicks,
+            };
+
+            clone.ImpactTags.Clear();
+            foreach (var tag in source.ImpactTags)
+            {
+                clone.ImpactTags.Add(tag);
+            }
+
+            foreach (var operation in source.ImpactOperations)
+            {
+                clone.ImpactOperations.Add(CloneImpactOperation(operation, effectDefinitionMap, triggerDefinitionMap));
+            }
+
+            return clone;
+        }
+
+        private CombatProjectileState CloneProjectileState(
+            CombatProjectileState source,
+            IDictionary<EffectDefinition, EffectDefinition> effectDefinitionMap,
+            IDictionary<TriggerDefinition, TriggerDefinition> triggerDefinitionMap)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            var clone = new CombatProjectileState
+            {
+                InstanceId = source.InstanceId,
+                SourceActorId = source.SourceActorId,
+                TargetActorId = source.TargetActorId,
+                AbilityId = source.AbilityId,
+                SourceEffectId = source.SourceEffectId,
+                Stage = source.Stage,
+                TrackingMode = source.TrackingMode,
+                Position = source.Position,
+                FixedTargetPoint = source.FixedTargetPoint,
+                HasFixedTargetPoint = source.HasFixedTargetPoint,
+                LastResolvedTargetPoint = source.LastResolvedTargetPoint,
+                SpeedPerTick = source.SpeedPerTick,
+                HitRadius = source.HitRadius,
+                SpawnTick = source.SpawnTick,
+                ExpireTick = source.ExpireTick,
+            };
+
+            clone.ImpactTags.Clear();
+            foreach (var tag in source.ImpactTags)
+            {
+                clone.ImpactTags.Add(tag);
+            }
+
+            foreach (var operation in source.ImpactOperations)
+            {
+                clone.ImpactOperations.Add(CloneImpactOperation(operation, effectDefinitionMap, triggerDefinitionMap));
+            }
+
+            return clone;
+        }
+
         private ActiveTriggerInstance CloneActiveTriggerInstance(
             ActiveTriggerInstance source,
             IDictionary<TriggerDefinition, TriggerDefinition> triggerDefinitionMap,

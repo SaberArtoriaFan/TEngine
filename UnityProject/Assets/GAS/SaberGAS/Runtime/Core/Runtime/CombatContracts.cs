@@ -63,6 +63,9 @@ namespace Saber.GAS.Runtime
         /// 历史命令重放完成。
         /// </summary>
         ReplayCompleted = 12,
+        ProjectileSpawned = 13,
+        ProjectileHit = 14,
+        ProjectileExpired = 15,
     }
 
     /// <summary>
