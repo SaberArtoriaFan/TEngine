@@ -49,3 +49,18 @@
 - `20_投射物飞行系统说明.md`
 - `21_投射物表现层接入指南.md`
 - `23_Example快速开始_投射物互射.md`
+
+## 5. Actor Inspector 实时状态显示
+
+即时伤害示例同样支持在 Actor 身上挂显示脚本（由 Runner 自动挂载）：
+
+- `GasActorRuntimeDisplay`
+
+该显示会实时输出：
+
+- AttributeSet
+- Ability
+- Effect
+- Trigger
+
+以及资源与基础状态，便于你直接在 Inspector 观察框架链路是否正确刷新。

@@ -15,7 +15,7 @@ namespace Saber.GAS.Examples.QuickStart
     /// <summary>
     /// Projectile QuickStart: two actors periodically fire projectiles at each other.
     /// </summary>
-    public sealed class GasQuickStartProjectileDuelRunner : MonoBehaviour
+    public sealed class GasQuickStartProjectileDuelRunner : MonoBehaviour, IGasActorRuntimeStateProvider
     {
         private static readonly ActorId ActorAId = new ActorId("Actor.Example.Projectile.A");
         private static readonly ActorId ActorBId = new ActorId("Actor.Example.Projectile.B");
@@ -61,6 +61,9 @@ namespace Saber.GAS.Examples.QuickStart
         [SerializeField] private Transform _actorAAnchor;
         [SerializeField] private Transform _actorBAnchor;
         [SerializeField] private bool _createAnchorsWhenMissing = true;
+
+        [Header("Actor Runtime Display")]
+        [SerializeField] private bool _attachActorRuntimeDisplay = true;
 
         [Header("Debug (Read Only)")]
         [SerializeField] private long _debugTick;
@@ -172,6 +175,7 @@ namespace Saber.GAS.Examples.QuickStart
             _worldState.AddAbility(BuildAbility());
             CreateActor(ActorAId, TeamAId, GetPosition(_actorAAnchor, new Vector3(-3f, 0f, 0f)));
             CreateActor(ActorBId, TeamBId, GetPosition(_actorBAnchor, new Vector3(3f, 0f, 0f)));
+            EnsureActorDisplays();
 
             _debugSpawned = 0;
             _debugHit = 0;
@@ -686,6 +690,40 @@ namespace Saber.GAS.Examples.QuickStart
         {
             actor = null;
             return _worldState != null && _worldState.TryGetActor(id, out actor);
+        }
+
+        public CombatWorldState WorldState => _worldState;
+
+        public bool TryGetActorState(ActorId actorId, out CombatActorState actor)
+        {
+            return TryGetActor(actorId, out actor);
+        }
+
+        private void EnsureActorDisplays()
+        {
+            if (!_attachActorRuntimeDisplay)
+            {
+                return;
+            }
+
+            AttachActorDisplay(_actorAAnchor, ActorAId, "Actor A");
+            AttachActorDisplay(_actorBAnchor, ActorBId, "Actor B");
+        }
+
+        private void AttachActorDisplay(Transform anchor, ActorId actorId, string title)
+        {
+            if (anchor == null)
+            {
+                return;
+            }
+
+            var display = anchor.GetComponent<GasActorRuntimeDisplay>();
+            if (display == null)
+            {
+                display = anchor.gameObject.AddComponent<GasActorRuntimeDisplay>();
+            }
+
+            display.Configure(this, actorId, title);
         }
 
         private void UpdateDebug()

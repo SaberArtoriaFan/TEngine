@@ -78,7 +78,42 @@ Runner 会自动尝试驱动以下 Animator 参数：
 
 如果 Animator 上没有这些参数，示例仍可运行，只是不会触发对应动画。
 
-## 6. 链路说明（Authoring -> Runtime -> Event -> View）
+## 6. 在 Actor 身上挂载 Inspector 运行时显示脚本
+
+本次已提供 Actor 侧显示脚本：
+
+- `Assets/GAS/SaberGAS/Examples/QuickStart/GasActorRuntimeDisplay.cs`
+
+配套 Provider 接口：
+
+- `Assets/GAS/SaberGAS/Examples/QuickStart/IGasActorRuntimeStateProvider.cs`
+
+两个 QuickStart Runner 已实现该接口并默认自动挂载显示组件：
+
+- `GasQuickStartDuelRunner`
+- `GasQuickStartProjectileDuelRunner`
+
+显示内容包括：
+
+- AttributeSet（Base/Current/Modifier 数）
+- ResourceSet（Current/Max/Regen）
+- Ability（Granted + ActiveInstance）
+- Effect（ActiveEffects）
+- Trigger（Actor/AbilityInstance/EffectInstance）
+
+你也可以手动挂：
+
+1. 把 `GasActorRuntimeDisplay` 挂到任意 Actor 表现体
+2. `Runtime Provider` 选择一个实现 `IGasActorRuntimeStateProvider` 的 Runner
+3. `Actor Id` 填运行时 ActorId（例如 `Actor.Example.Projectile.A`）
+4. 在组件 Inspector 中用按钮切换查看：
+   - `Overview`
+   - `AttributeSet`
+   - `Ability`
+   - `Effect`
+   - `Trigger`
+
+## 7. 链路说明（Authoring -> Runtime -> Event -> View）
 
 1. Ability 触发 `SpawnProjectile`（ImpactOperation）
 2. Runtime 创建并推进 `CombatProjectileState`
@@ -86,7 +121,7 @@ Runner 会自动尝试驱动以下 Animator 参数：
 4. Runner 通过 `ProjectileInstanceId -> ViewBinding` 维护视图生命周期
 5. 命中/过期后播放收尾效果并回收对象
 
-## 7. 常见问题排查
+## 8. 常见问题排查
 
 ### 7.1 Tick 不增长
 
@@ -105,7 +140,7 @@ Runner 会自动尝试驱动以下 Animator 参数：
 - 提高 `_lifetimeTicks`
 - 检查 `_speedPerTick` 是否过低导致寿命内飞不到目标
 
-## 8. 推荐验证顺序
+## 9. 推荐验证顺序
 
 1. 先跑 `GAS_QuickStart_Duel.unity`（即时伤害最短链路）
 2. 再跑 `GAS_QuickStart_ProjectileDuel.unity`（投射物与表现层链路）

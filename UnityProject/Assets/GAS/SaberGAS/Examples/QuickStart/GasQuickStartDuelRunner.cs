@@ -12,7 +12,7 @@ namespace Saber.GAS.Examples.QuickStart
     /// 最小可运行的 GAS 示例：启动后创建两个 Actor，按固定 Tick 间隔互相释放即时伤害能力。
     /// 用于快速验证 Runtime、Ability、Effect、Targeting 与 Tick 管线是否正常工作。
     /// </summary>
-    public sealed class GasQuickStartDuelRunner : MonoBehaviour
+    public sealed class GasQuickStartDuelRunner : MonoBehaviour, IGasActorRuntimeStateProvider
     {
         private static readonly ActorId ActorAId = new ActorId("Actor.Example.QuickStart.A");
         private static readonly ActorId ActorBId = new ActorId("Actor.Example.QuickStart.B");
@@ -57,6 +57,10 @@ namespace Saber.GAS.Examples.QuickStart
         private Transform _actorBAnchor;
         [SerializeField]
         private bool _createPrimitiveAnchorsWhenMissing = true;
+
+        [Header("Actor Runtime Display")]
+        [SerializeField]
+        private bool _attachActorRuntimeDisplay = true;
 
         [Header("运行时调试状态（只读）")]
         [SerializeField]
@@ -126,6 +130,7 @@ namespace Saber.GAS.Examples.QuickStart
             var actorBPosition = GetWorldPosition(_actorBAnchor, new Vector3(2f, 0f, 0f));
             CreateActor(ActorAId, TeamAId, actorAPosition);
             CreateActor(ActorBId, TeamBId, actorBPosition);
+            EnsureActorDisplays();
 
             _tickTimer = 0f;
             _nextAttackTick = 0L;
@@ -391,6 +396,40 @@ namespace Saber.GAS.Examples.QuickStart
         {
             actor = null;
             return _worldState != null && _worldState.TryGetActor(actorId, out actor);
+        }
+
+        public CombatWorldState WorldState => _worldState;
+
+        public bool TryGetActorState(ActorId actorId, out CombatActorState actor)
+        {
+            return TryGetActor(actorId, out actor);
+        }
+
+        private void EnsureActorDisplays()
+        {
+            if (!_attachActorRuntimeDisplay)
+            {
+                return;
+            }
+
+            AttachActorDisplay(_actorAAnchor, ActorAId, "Actor A");
+            AttachActorDisplay(_actorBAnchor, ActorBId, "Actor B");
+        }
+
+        private void AttachActorDisplay(Transform anchor, ActorId actorId, string title)
+        {
+            if (anchor == null)
+            {
+                return;
+            }
+
+            var display = anchor.GetComponent<GasActorRuntimeDisplay>();
+            if (display == null)
+            {
+                display = anchor.gameObject.AddComponent<GasActorRuntimeDisplay>();
+            }
+
+            display.Configure(this, actorId, title);
         }
 
         private void UpdateDebugSnapshot()
