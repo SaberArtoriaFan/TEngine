@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using Herta;
 using Saber.GAS.Actors;
@@ -38,6 +39,12 @@ namespace Saber.GAS.Examples.QuickStart
         [Header("Inspector Output (Read Only)")]
         [SerializeField] private string _status = "Not refreshed.";
         [SerializeField] [TextArea(12, 40)] private string _inspectorText = string.Empty;
+        [SerializeField, HideInInspector] private string[] _grantedAbilityIds = Array.Empty<string>();
+        [SerializeField, HideInInspector] private string[] _activeAbilityIds = Array.Empty<string>();
+        [SerializeField, HideInInspector] private string[] _activeEffectIds = Array.Empty<string>();
+        [SerializeField, HideInInspector] private string[] _actorTriggerIds = Array.Empty<string>();
+        [SerializeField, HideInInspector] private string[] _abilityTriggerIds = Array.Empty<string>();
+        [SerializeField, HideInInspector] private string[] _effectTriggerIds = Array.Empty<string>();
 
         private readonly StringBuilder _builder = new StringBuilder(2048);
         private IGasActorRuntimeStateProvider _provider;
@@ -50,6 +57,18 @@ namespace Saber.GAS.Examples.QuickStart
         public string InspectorText => _inspectorText;
 
         public bool AutoRefreshInPlayMode => _autoRefreshInPlayMode;
+
+        public IReadOnlyList<string> GrantedAbilityIds => _grantedAbilityIds;
+
+        public IReadOnlyList<string> ActiveAbilityIds => _activeAbilityIds;
+
+        public IReadOnlyList<string> ActiveEffectIds => _activeEffectIds;
+
+        public IReadOnlyList<string> ActorTriggerIds => _actorTriggerIds;
+
+        public IReadOnlyList<string> AbilityTriggerIds => _abilityTriggerIds;
+
+        public IReadOnlyList<string> EffectTriggerIds => _effectTriggerIds;
 
         public void Configure(MonoBehaviour runtimeProvider, ActorId actorId, string title)
         {
@@ -72,6 +91,7 @@ namespace Saber.GAS.Examples.QuickStart
             {
                 _status = "Provider missing.";
                 _inspectorText = string.Empty;
+                ClearJumpSnapshots();
                 return;
             }
 
@@ -79,6 +99,7 @@ namespace Saber.GAS.Examples.QuickStart
             {
                 _status = "ActorId invalid.";
                 _inspectorText = string.Empty;
+                ClearJumpSnapshots();
                 return;
             }
 
@@ -86,9 +107,11 @@ namespace Saber.GAS.Examples.QuickStart
             {
                 _status = $"Actor not found: {actorId.Value}";
                 _inspectorText = string.Empty;
+                ClearJumpSnapshots();
                 return;
             }
 
+            UpdateJumpSnapshots(actor);
             _builder.Length = 0;
             AppendHeader(actor);
 
@@ -501,6 +524,102 @@ namespace Saber.GAS.Examples.QuickStart
             _builder.Append(" Charges=");
             _builder.Append(trigger != null ? trigger.RemainingCharges : 0);
             _builder.Append('\n');
+        }
+
+        private void ClearJumpSnapshots()
+        {
+            _grantedAbilityIds = Array.Empty<string>();
+            _activeAbilityIds = Array.Empty<string>();
+            _activeEffectIds = Array.Empty<string>();
+            _actorTriggerIds = Array.Empty<string>();
+            _abilityTriggerIds = Array.Empty<string>();
+            _effectTriggerIds = Array.Empty<string>();
+        }
+
+        private void UpdateJumpSnapshots(CombatActorState actor)
+        {
+            var grantedAbilities = new List<string>();
+            var activeAbilities = new List<string>();
+            var activeEffects = new List<string>();
+            var actorTriggers = new List<string>();
+            var abilityTriggers = new List<string>();
+            var effectTriggers = new List<string>();
+
+            for (var i = 0; i < actor.GrantedAbilities.Count; i++)
+            {
+                AppendUniqueId(grantedAbilities, actor.GrantedAbilities[i].Value);
+            }
+
+            for (var i = 0; i < actor.ActiveAbilityInstances.Count; i++)
+            {
+                var abilityInstance = actor.ActiveAbilityInstances[i];
+                if (abilityInstance?.Ability != null)
+                {
+                    AppendUniqueId(activeAbilities, abilityInstance.Ability.Id.Value);
+                }
+
+                var triggerList = abilityInstance?.ActiveTriggers;
+                if (triggerList == null)
+                {
+                    continue;
+                }
+
+                for (var j = 0; j < triggerList.Count; j++)
+                {
+                    var trigger = triggerList[j];
+                    AppendUniqueId(abilityTriggers, trigger?.Definition?.Id.Value);
+                }
+            }
+
+            for (var i = 0; i < actor.ActiveEffects.Count; i++)
+            {
+                var effect = actor.ActiveEffects[i];
+                var definition = effect?.Spec?.Definition;
+                AppendUniqueId(activeEffects, definition?.Id.Value);
+
+                var triggerList = effect?.ActiveTriggers;
+                if (triggerList == null)
+                {
+                    continue;
+                }
+
+                for (var j = 0; j < triggerList.Count; j++)
+                {
+                    var trigger = triggerList[j];
+                    AppendUniqueId(effectTriggers, trigger?.Definition?.Id.Value);
+                }
+            }
+
+            for (var i = 0; i < actor.ActiveTriggers.Count; i++)
+            {
+                var trigger = actor.ActiveTriggers[i];
+                AppendUniqueId(actorTriggers, trigger?.Definition?.Id.Value);
+            }
+
+            _grantedAbilityIds = grantedAbilities.ToArray();
+            _activeAbilityIds = activeAbilities.ToArray();
+            _activeEffectIds = activeEffects.ToArray();
+            _actorTriggerIds = actorTriggers.ToArray();
+            _abilityTriggerIds = abilityTriggers.ToArray();
+            _effectTriggerIds = effectTriggers.ToArray();
+        }
+
+        private static void AppendUniqueId(List<string> destination, string value)
+        {
+            if (destination == null || string.IsNullOrWhiteSpace(value))
+            {
+                return;
+            }
+
+            for (var i = 0; i < destination.Count; i++)
+            {
+                if (string.Equals(destination[i], value, StringComparison.Ordinal))
+                {
+                    return;
+                }
+            }
+
+            destination.Add(value);
         }
 
         private bool ResolveProvider()

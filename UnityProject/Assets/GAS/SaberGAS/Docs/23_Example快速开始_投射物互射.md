@@ -112,6 +112,7 @@ Runner 会自动尝试驱动以下 Animator 参数：
    - `Ability`
    - `Effect`
    - `Trigger`
+5. 在 `Ability / Effect / Trigger` 区域点击条目按钮，可直接定位并打开对应定义资产（按 Id 匹配）。
 
 ## 7. 链路说明（Authoring -> Runtime -> Event -> View）
 

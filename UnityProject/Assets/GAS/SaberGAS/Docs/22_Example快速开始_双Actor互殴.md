@@ -64,3 +64,4 @@
 - Trigger
 
 以及资源与基础状态，便于你直接在 Inspector 观察框架链路是否正确刷新。
+在 `Ability / Effect / Trigger` 标签下点击对应条目，可直接跳转到定义资产查看。
