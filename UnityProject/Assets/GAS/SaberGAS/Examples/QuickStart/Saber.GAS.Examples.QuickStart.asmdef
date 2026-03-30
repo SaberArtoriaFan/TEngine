@@ -1,0 +1,17 @@
+{
+    "name": "Saber.GAS.Examples.QuickStart",
+    "rootNamespace": "Saber.GAS.Examples.QuickStart",
+    "references": [
+        "Saber.GAS",
+        "FixedPoint"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
