@@ -255,38 +255,6 @@ namespace Saber.GAS.Examples.QuickStart
                 _builder.Append("- (empty)");
                 _builder.Append('\n');
             }
-
-            _builder.Append('\n');
-            _builder.Append("[ResourceSet]");
-            _builder.Append('\n');
-            var resourceCount = 0;
-            foreach (var pair in actor.Resources.Entries)
-            {
-                resourceCount++;
-                if (resourceCount > _maxEntriesPerSection)
-                {
-                    _builder.Append("... (truncated)");
-                    _builder.Append('\n');
-                    break;
-                }
-
-                var value = pair.Value;
-                _builder.Append("- ");
-                _builder.Append(pair.Key.Value);
-                _builder.Append(" Cur=");
-                _builder.Append(FormatFp(value.Current));
-                _builder.Append('/');
-                _builder.Append(FormatFp(value.Max));
-                _builder.Append(" Regen=");
-                _builder.Append(FormatFp(value.RegenPerTick));
-                _builder.Append('\n');
-            }
-
-            if (resourceCount == 0)
-            {
-                _builder.Append("- (empty)");
-                _builder.Append('\n');
-            }
         }
 
         private void AppendAbilitySection(CombatActorState actor)

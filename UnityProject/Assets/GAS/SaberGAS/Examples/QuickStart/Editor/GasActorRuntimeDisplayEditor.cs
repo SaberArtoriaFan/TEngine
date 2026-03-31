@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
@@ -10,9 +11,58 @@ namespace Saber.GAS.Examples.QuickStart.Editor
     [CustomEditor(typeof(GasActorRuntimeDisplay))]
     public sealed class GasActorRuntimeDisplayEditor : UnityEditor.Editor
     {
-        private static readonly Dictionary<string, UnityEngine.Object> AbilityAssetCache = new Dictionary<string, UnityEngine.Object>(StringComparer.Ordinal);
-        private static readonly Dictionary<string, UnityEngine.Object> EffectAssetCache = new Dictionary<string, UnityEngine.Object>(StringComparer.Ordinal);
-        private static readonly Dictionary<string, UnityEngine.Object> TriggerAssetCache = new Dictionary<string, UnityEngine.Object>(StringComparer.Ordinal);
+        private enum ResolvedTargetSource
+        {
+            Missing = 0,
+            Asset = 1,
+            Code = 2,
+        }
+
+        private readonly struct ResolvedTarget
+        {
+            public static ResolvedTarget Missing => new ResolvedTarget(ResolvedTargetSource.Missing, null, 0, string.Empty);
+
+            public ResolvedTarget(ResolvedTargetSource source, UnityEngine.Object targetObject, int line, string path)
+            {
+                Source = source;
+                TargetObject = targetObject;
+                Line = line;
+                Path = path ?? string.Empty;
+            }
+
+            public ResolvedTargetSource Source { get; }
+
+            public UnityEngine.Object TargetObject { get; }
+
+            public int Line { get; }
+
+            public string Path { get; }
+
+            public bool IsValid => TargetObject != null;
+
+            public string SourceLabel
+            {
+                get
+                {
+                    switch (Source)
+                    {
+                        case ResolvedTargetSource.Asset:
+                            return "Asset";
+                        case ResolvedTargetSource.Code:
+                            return "Code";
+                        default:
+                            return "Missing";
+                    }
+                }
+            }
+        }
+
+        private static readonly string[] AuthoringSearchFolders = { "Assets/GAS/SaberGAS" };
+        private static readonly string[] QuickStartCodeSearchFolders = { "Assets/GAS/SaberGAS/Examples/QuickStart" };
+
+        private static readonly Dictionary<string, ResolvedTarget> AbilityTargetCache = new Dictionary<string, ResolvedTarget>(StringComparer.Ordinal);
+        private static readonly Dictionary<string, ResolvedTarget> EffectTargetCache = new Dictionary<string, ResolvedTarget>(StringComparer.Ordinal);
+        private static readonly Dictionary<string, ResolvedTarget> TriggerTargetCache = new Dictionary<string, ResolvedTarget>(StringComparer.Ordinal);
 
         private SerializedProperty _runtimeProvider;
         private SerializedProperty _actorId;
@@ -127,11 +177,9 @@ namespace Saber.GAS.Examples.QuickStart.Editor
                     DrawTriggerJumpGroups(view);
                     break;
                 default:
-                    DrawAbilityJumpGroups(view);
-                    EditorGUILayout.Space(4f);
-                    DrawEffectJumpGroups(view);
-                    EditorGUILayout.Space(4f);
-                    DrawTriggerJumpGroups(view);
+                    EditorGUILayout.HelpBox(
+                        "当前分区仅显示本区运行时数据。切到 Ability / Effect / Trigger 可跳转定义。",
+                        MessageType.None);
                     break;
             }
         }
@@ -139,28 +187,28 @@ namespace Saber.GAS.Examples.QuickStart.Editor
         private void DrawAbilityJumpGroups(GasActorRuntimeDisplay view)
         {
             EditorGUILayout.LabelField("Ability", EditorStyles.miniBoldLabel);
-            DrawIdButtons("Granted", view.GrantedAbilityIds, ResolveAbilityAssetById, "Ability");
-            DrawIdButtons("Active", view.ActiveAbilityIds, ResolveAbilityAssetById, "Ability");
+            DrawIdButtons("Granted", view.GrantedAbilityIds, ResolveAbilityTargetById, "Ability");
+            DrawIdButtons("Active", view.ActiveAbilityIds, ResolveAbilityTargetById, "Ability");
         }
 
         private void DrawEffectJumpGroups(GasActorRuntimeDisplay view)
         {
             EditorGUILayout.LabelField("Effect", EditorStyles.miniBoldLabel);
-            DrawIdButtons("Active", view.ActiveEffectIds, ResolveEffectAssetById, "Effect");
+            DrawIdButtons("Active", view.ActiveEffectIds, ResolveEffectTargetById, "Effect");
         }
 
         private void DrawTriggerJumpGroups(GasActorRuntimeDisplay view)
         {
             EditorGUILayout.LabelField("Trigger", EditorStyles.miniBoldLabel);
-            DrawIdButtons("Actor", view.ActorTriggerIds, ResolveTriggerAssetById, "Trigger");
-            DrawIdButtons("Ability", view.AbilityTriggerIds, ResolveTriggerAssetById, "Trigger");
-            DrawIdButtons("Effect", view.EffectTriggerIds, ResolveTriggerAssetById, "Trigger");
+            DrawIdButtons("Actor", view.ActorTriggerIds, ResolveTriggerTargetById, "Trigger");
+            DrawIdButtons("Ability", view.AbilityTriggerIds, ResolveTriggerTargetById, "Trigger");
+            DrawIdButtons("Effect", view.EffectTriggerIds, ResolveTriggerTargetById, "Trigger");
         }
 
         private void DrawIdButtons(
             string label,
             IReadOnlyList<string> ids,
-            Func<string, UnityEngine.Object> resolver,
+            Func<string, ResolvedTarget> resolver,
             string kindName)
         {
             EditorGUILayout.LabelField(label, EditorStyles.miniLabel);
@@ -183,75 +231,81 @@ namespace Saber.GAS.Examples.QuickStart.Editor
                 EditorGUILayout.BeginHorizontal();
                 if (GUILayout.Button(id, EditorStyles.miniButtonLeft))
                 {
-                    OpenResolvedAsset(target, kindName, id);
+                    OpenResolvedTarget(target, kindName, id);
                 }
 
-                GUILayout.Label(target != null ? "Found" : "Missing", EditorStyles.miniLabel, GUILayout.Width(52f));
+                GUILayout.Label(target.SourceLabel, EditorStyles.miniLabel, GUILayout.Width(56f));
                 EditorGUILayout.EndHorizontal();
             }
         }
 
-        private static void OpenResolvedAsset(UnityEngine.Object target, string kindName, string id)
+        private static void OpenResolvedTarget(ResolvedTarget target, string kindName, string id)
         {
-            if (target == null)
+            if (!target.IsValid)
             {
                 EditorUtility.DisplayDialog(
-                    "未找到对应定义",
-                    $"{kindName} Id `{id}` 没有匹配到 Authoring 资产。",
+                    "未找到可跳转定义",
+                    $"{kindName} Id `{id}` 未匹配到 Authoring 资产，也未在 QuickStart 示例代码中找到定义。",
                     "知道了");
                 return;
             }
 
-            Selection.activeObject = target;
-            EditorGUIUtility.PingObject(target);
-            AssetDatabase.OpenAsset(target);
+            Selection.activeObject = target.TargetObject;
+            EditorGUIUtility.PingObject(target.TargetObject);
+            if (target.Source == ResolvedTargetSource.Code && target.Line > 0)
+            {
+                AssetDatabase.OpenAsset(target.TargetObject, target.Line);
+                return;
+            }
+
+            AssetDatabase.OpenAsset(target.TargetObject);
         }
 
-        private static UnityEngine.Object ResolveAbilityAssetById(string abilityId)
+        private static ResolvedTarget ResolveAbilityTargetById(string abilityId)
         {
             return ResolveById(
                 abilityId,
-                AbilityAssetCache,
+                AbilityTargetCache,
                 "AbilityDefinitionAsset",
                 "Saber.GAS.Authoring.AbilityIdentityModule",
                 "AbilityId");
         }
 
-        private static UnityEngine.Object ResolveEffectAssetById(string effectId)
+        private static ResolvedTarget ResolveEffectTargetById(string effectId)
         {
             return ResolveById(
                 effectId,
-                EffectAssetCache,
+                EffectTargetCache,
                 "EffectDefinitionAsset",
                 "Saber.GAS.Authoring.EffectIdentityModule",
                 "EffectId");
         }
 
-        private static UnityEngine.Object ResolveTriggerAssetById(string triggerId)
+        private static ResolvedTarget ResolveTriggerTargetById(string triggerId)
         {
             return ResolveById(
                 triggerId,
-                TriggerAssetCache,
+                TriggerTargetCache,
                 "TriggerDefinitionAsset",
                 "Saber.GAS.Authoring.TriggerIdentityModule",
                 "TriggerId");
         }
 
-        private static UnityEngine.Object ResolveById(
+        private static ResolvedTarget ResolveById(
             string id,
-            Dictionary<string, UnityEngine.Object> cache,
+            Dictionary<string, ResolvedTarget> cache,
             string assetTypeName,
             string identityTypeName,
             string identityValuePropertyName)
         {
             if (string.IsNullOrWhiteSpace(id))
             {
-                return null;
+                return ResolvedTarget.Missing;
             }
 
             if (cache.TryGetValue(id, out var cached))
             {
-                if (cached == null || AssetDatabase.Contains(cached))
+                if (IsCacheValid(cached))
                 {
                     return cached;
                 }
@@ -259,7 +313,36 @@ namespace Saber.GAS.Examples.QuickStart.Editor
                 cache.Remove(id);
             }
 
-            var guids = AssetDatabase.FindAssets("t:ScriptableObject", new[] { "Assets/GAS/SaberGAS" });
+            var authoringAsset = ResolveAuthoringAssetById(id, assetTypeName, identityTypeName, identityValuePropertyName);
+            if (authoringAsset != null)
+            {
+                var assetTarget = new ResolvedTarget(ResolvedTargetSource.Asset, authoringAsset, 0, string.Empty);
+                cache[id] = assetTarget;
+                return assetTarget;
+            }
+
+            var codeTarget = ResolveCodeTargetById(id);
+            cache[id] = codeTarget;
+            return codeTarget;
+        }
+
+        private static bool IsCacheValid(ResolvedTarget cached)
+        {
+            if (!cached.IsValid)
+            {
+                return true;
+            }
+
+            return AssetDatabase.Contains(cached.TargetObject);
+        }
+
+        private static UnityEngine.Object ResolveAuthoringAssetById(
+            string id,
+            string assetTypeName,
+            string identityTypeName,
+            string identityValuePropertyName)
+        {
+            var guids = AssetDatabase.FindAssets("t:ScriptableObject", AuthoringSearchFolders);
             for (var i = 0; i < guids.Length; i++)
             {
                 var path = AssetDatabase.GUIDToAssetPath(guids[i]);
@@ -288,13 +371,83 @@ namespace Saber.GAS.Examples.QuickStart.Editor
                         continue;
                     }
 
-                    cache[id] = candidate;
                     return candidate;
                 }
             }
 
-            cache[id] = null;
             return null;
+        }
+
+        private static ResolvedTarget ResolveCodeTargetById(string id)
+        {
+            var guids = AssetDatabase.FindAssets("t:MonoScript", QuickStartCodeSearchFolders);
+            var exactToken = "\"" + id + "\"";
+            for (var i = 0; i < guids.Length; i++)
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guids[i]);
+                if (string.IsNullOrWhiteSpace(path) ||
+                    !path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var fullPath = Path.GetFullPath(path);
+                if (!File.Exists(fullPath))
+                {
+                    continue;
+                }
+
+                string[] lines;
+                try
+                {
+                    lines = File.ReadAllLines(fullPath);
+                }
+                catch
+                {
+                    continue;
+                }
+
+                var line = FindLine(lines, exactToken, id);
+                if (line <= 0)
+                {
+                    continue;
+                }
+
+                var script = AssetDatabase.LoadAssetAtPath<MonoScript>(path);
+                if (script == null)
+                {
+                    continue;
+                }
+
+                return new ResolvedTarget(ResolvedTargetSource.Code, script, line, path);
+            }
+
+            return ResolvedTarget.Missing;
+        }
+
+        private static int FindLine(string[] lines, string exactToken, string fallbackToken)
+        {
+            for (var i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i];
+                if (!string.IsNullOrEmpty(exactToken) &&
+                    line.IndexOf(exactToken, StringComparison.Ordinal) >= 0)
+                {
+                    return i + 1;
+                }
+            }
+
+            for (var i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i];
+                if (!string.IsNullOrEmpty(fallbackToken) &&
+                    line.IndexOf(fallbackToken, StringComparison.Ordinal) >= 0)
+                {
+                    return i + 1;
+                }
+            }
+
+            return 0;
         }
 
         private static bool MatchByIdentity(
