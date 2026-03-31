@@ -8,9 +8,9 @@ namespace Saber.GAS.Editor
 {
     public static class GasSampleCatalogUtility
     {
-        public const string QuickStartDocumentPath = "Assets/GAS/SaberGAS/Docs/18_GAS快速开始.md";
+                public const string QuickStartDocumentPath = "Assets/GAS/SaberGAS/Docs/SaberGAS_QuickStart_Examples.md";
 
-        public const string ModuleExtensionGuideDocumentPath = "Assets/GAS/SaberGAS/Docs/19_GAS模块扩展指南.md";
+                public const string ModuleExtensionGuideDocumentPath = "Assets/GAS/SaberGAS/Docs/SaberGAS_Extension_SDK.md";
 
         private const string SampleFolder = "Assets/GAS/SaberGAS/Samples";
 

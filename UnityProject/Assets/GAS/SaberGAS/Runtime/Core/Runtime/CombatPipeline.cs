@@ -6,6 +6,7 @@ using Saber.GAS.Effects;
 using Saber.GAS.Foundation;
 using Saber.GAS.Projectiles;
 using Saber.GAS.Tags;
+using Saber.GAS.Triggers;
 
 namespace Saber.GAS.Runtime
 {
@@ -381,7 +382,9 @@ namespace Saber.GAS.Runtime
             ActionGates = new List<ICombatActionGate>();
             ImpactMutators = new List<ICombatImpactMutator>();
             ImpactResolvers = new List<ICombatImpactResolver>();
+            ImpactOperationHandlers = new List<IImpactOperationHandler>();
             CustomTriggerActionRegistries = new List<Triggers.ICombatCustomTriggerActionRegistry>();
+            TriggerActionDescriptorRegistries = new List<Triggers.ICombatTriggerActionDescriptorRegistry>();
             RuleModules = new List<ICombatRuleModule>();
         }
 
@@ -406,6 +409,12 @@ namespace Saber.GAS.Runtime
         public ICombatEventSink EventSink { get; set; }
 
         /// <summary>
+        /// 获取或设置领域事件总线。
+        /// 若为空则会由 Runtime 自动创建默认总线，并把 EventSink 作为 deterministic 出口接入。
+        /// </summary>
+        public ICombatDomainEventBus DomainEventBus { get; set; }
+
+        /// <summary>
         /// 获取行动阻断扩展列表。
         /// </summary>
         public IList<ICombatActionGate> ActionGates { get; }
@@ -421,14 +430,44 @@ namespace Saber.GAS.Runtime
         public IList<ICombatImpactResolver> ImpactResolvers { get; }
 
         /// <summary>
+        /// 获取 ImpactOperation Handler 扩展列表。
+        /// </summary>
+        public IList<IImpactOperationHandler> ImpactOperationHandlers { get; }
+
+        /// <summary>
         /// 获取自定义 TriggerAction 注册表列表。
         /// 业务层可以在 Runtime 构造前补充额外注册表，和全局自动注册表一起参与派发。
         /// </summary>
         public IList<Triggers.ICombatCustomTriggerActionRegistry> CustomTriggerActionRegistries { get; }
 
         /// <summary>
+        /// 获取 TriggerAction 描述符注册表列表。
+        /// </summary>
+        public IList<Triggers.ICombatTriggerActionDescriptorRegistry> TriggerActionDescriptorRegistries { get; }
+
+        /// <summary>
         /// 获取规则模块列表。
         /// </summary>
         public IList<ICombatRuleModule> RuleModules { get; }
+
+        /// <summary>
+        /// 获取或设置能力激活服务实现。
+        /// </summary>
+        public ICombatActivationService ActivationService { get; set; }
+
+        /// <summary>
+        /// 获取或设置 Impact 结算服务实现。
+        /// </summary>
+        public ICombatImpactService ImpactService { get; set; }
+
+        /// <summary>
+        /// 获取或设置 Effect 生命周期服务实现。
+        /// </summary>
+        public ICombatEffectLifecycleService EffectLifecycleService { get; set; }
+
+        /// <summary>
+        /// 获取或设置 TriggerBridge 服务实现。
+        /// </summary>
+        public ICombatTriggerBridgeService TriggerBridgeService { get; set; }
     }
 }

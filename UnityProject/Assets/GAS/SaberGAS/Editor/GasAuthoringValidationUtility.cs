@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Saber.GAS.Authoring;
 using Saber.GAS.Triggers;
@@ -41,47 +41,23 @@ namespace Saber.GAS.Editor
                 return null;
             }
 
-            switch (action.Kind)
+            TriggerActionDefinition builtAction;
+            try
             {
-                case TriggerActionKind.ActivateAbility:
-                    return action.TriggeredAbility == null
-                        ? "当前 Trigger 动作是 ActivateAbility，但没有指定要触发的 Ability。"
-                        : null;
-                case TriggerActionKind.ApplyEffect:
-                    return action.EffectAsset == null
-                        ? "当前 Trigger 动作是 ApplyEffect，但没有指定目标 Effect。"
-                        : null;
-                case TriggerActionKind.RemoveEffectById:
-                    return action.EffectAsset == null
-                        ? "当前 Trigger 动作是 RemoveEffectById，但没有指定要移除的 Effect。"
-                        : null;
-                case TriggerActionKind.CancelAbility:
-                    return action.AbilityToCancel == null
-                        ? "当前 Trigger 动作是 CancelAbility，但没有指定要取消的 Ability。"
-                        : null;
-                case TriggerActionKind.RemoveEffectsByTag:
-                case TriggerActionKind.CleanseByTag:
-                    return string.IsNullOrWhiteSpace(action.EffectTag)
-                        ? "当前 Trigger 动作依赖 EffectTag，但 EffectTag 为空。"
-                        : null;
-                case TriggerActionKind.AddResource:
-                case TriggerActionKind.RemoveResource:
-                case TriggerActionKind.AddResourceFromImpact:
-                    return string.IsNullOrWhiteSpace(action.ResourceId)
-                        ? "当前 Trigger 动作需要 ResourceId，但 ResourceId 为空。"
-                        : null;
-                case TriggerActionKind.AddTag:
-                case TriggerActionKind.RemoveTag:
-                    return string.IsNullOrWhiteSpace(action.Tag)
-                        ? "当前 Trigger 动作需要 Tag，但 Tag 为空。"
-                        : null;
-                case TriggerActionKind.EmitCue:
-                    return string.IsNullOrWhiteSpace(action.CueName)
-                        ? "当前 Trigger 动作需要 CueName，但 CueName 为空。"
-                        : null;
-                default:
-                    return null;
+                builtAction = new TriggerActionDefinition();
+                action.ApplyTo(builtAction, new CombatAuthoringBuildContext(), triggerAsset.name);
             }
+            catch (Exception exception)
+            {
+                return exception.Message;
+            }
+
+            if (!CombatTriggerActionDescriptorRegistryHub.TryGetDescriptor(builtAction.Kind, out var descriptor))
+            {
+                return string.Format("TriggerActionKind '{0}' 未注册到描述符系统。", builtAction.Kind);
+            }
+
+            return descriptor.Validate(builtAction);
         }
 
         public static List<string> CollectCatalogIssues(CombatDefinitionCatalogAsset catalog)

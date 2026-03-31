@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Herta;
 using Saber.GAS.Abilities;
@@ -25,6 +26,7 @@ namespace Saber.GAS.Runtime
         /// 统一接收战斗事件广播的事件汇聚端。
         /// </summary>
         private readonly ICombatEventSink _eventSink;
+        private readonly ICombatDomainEventBus _domainEventBus;
         /// <summary>
         /// 在 Impact 结算前参与改写内容的变异器集合。
         /// </summary>
@@ -33,6 +35,7 @@ namespace Saber.GAS.Runtime
         /// 负责把 ImpactOperation 解释成最终落地结果的解析器集合。
         /// </summary>
         private readonly IReadOnlyList<ICombatImpactResolver> _impactResolvers;
+        private readonly CompositeCombatImpactOperationHandlerRegistry _impactOperationHandlerRegistry;
         /// <summary>
         /// 提供行动资格、阶段收尾等模式规则的查询接口。
         /// </summary>
@@ -65,6 +68,11 @@ namespace Saber.GAS.Runtime
         /// 承担自定义 TriggerAction 的查找与派发。
         /// </summary>
         private readonly CompositeCombatCustomTriggerActionRegistry _customTriggerActionRegistry;
+        private readonly CompositeCombatTriggerActionDescriptorRegistry _triggerActionDescriptorRegistry;
+        private readonly ICombatActivationService _activationService;
+        private readonly ICombatImpactService _impactService;
+        private readonly ICombatEffectLifecycleService _effectLifecycleService;
+        private readonly ICombatTriggerBridgeService _triggerBridgeService;
 
         /// <summary>
         /// 使用世界状态和运行时配置创建核心战斗执行器。
@@ -77,7 +85,12 @@ namespace Saber.GAS.Runtime
             _modeRules = runtimeOptions.ModeRules ?? new DefaultCombatModeRules();
             _relationResolver = runtimeOptions.RelationResolver ?? new FallbackCombatActorRelationResolver();
             _targetingResolver = runtimeOptions.TargetingResolver ?? new DefaultTargetingResolver();
-            _eventSink = runtimeOptions.EventSink ?? new NullCombatEventSink();
+            _domainEventBus = runtimeOptions.DomainEventBus ?? new CombatDomainEventBus();
+            if (runtimeOptions.EventSink != null)
+            {
+                _domainEventBus.AddSink(CombatDomainEventChannel.Deterministic, runtimeOptions.EventSink);
+            }
+            _eventSink = _domainEventBus;
             var assemblyExtensions = new CompositeCombatAssemblyExtensions(
                 CombatAssemblyExtensionRegistryHub.Snapshot(),
                 runtimeOptions.ActionGates,
@@ -90,6 +103,14 @@ namespace Saber.GAS.Runtime
             _impactResolvers = assemblyExtensions.ImpactResolvers;
             _ruleModules = assemblyExtensions.RuleModules;
             _customTriggerActionRegistry = new CompositeCombatCustomTriggerActionRegistry(CollectCustomTriggerActionRegistries(runtimeOptions.CustomTriggerActionRegistries));
+            _triggerActionDescriptorRegistry = CombatTriggerActionDescriptorRegistryHub.CreateComposite(runtimeOptions.TriggerActionDescriptorRegistries);
+            _impactOperationHandlerRegistry = CombatImpactOperationHandlerRegistryHub.CreateComposite(
+                null,
+                CollectImpactOperationHandlers(runtimeOptions.ImpactOperationHandlers, _impactResolvers));
+            _activationService = runtimeOptions.ActivationService ?? new DefaultCombatActivationService();
+            _impactService = runtimeOptions.ImpactService ?? new DefaultCombatImpactService();
+            _effectLifecycleService = runtimeOptions.EffectLifecycleService ?? new DefaultCombatEffectLifecycleService();
+            _triggerBridgeService = runtimeOptions.TriggerBridgeService ?? new DefaultCombatTriggerBridgeService();
             _pools = new CombatRuntimePools();
             _triggerRegistry = new CombatTriggerRegistry();
             _triggerProcessor = new CombatTriggerProcessor(this);
@@ -123,6 +144,8 @@ namespace Saber.GAS.Runtime
         /// </summary>
         public CombatWorldState WorldState { get; }
 
+        public ICombatDomainEventBus DomainEventBus => _domainEventBus;
+
         /// <summary>
         /// Runtime 内部维护的观察者 Trigger 注册表。
         /// </summary>
@@ -132,6 +155,8 @@ namespace Saber.GAS.Runtime
         /// Runtime 当前使用的 Actor 关系解析器。
         /// </summary>
         internal ICombatActorRelationResolver RelationResolver => _relationResolver;
+
+        internal CompositeCombatTriggerActionDescriptorRegistry TriggerActionDescriptorRegistry => _triggerActionDescriptorRegistry;
 
         /// <summary>
         /// 执行一次自定义 TriggerAction。
@@ -152,6 +177,11 @@ namespace Saber.GAS.Runtime
         }
 
         public void RaiseTriggerEvent(CombatTriggerContext context)
+        {
+            _triggerBridgeService.RaiseTriggerEvent(this, context);
+        }
+
+        internal void RaiseTriggerEventCore(CombatTriggerContext context)
         {
             if (context == null)
             {
@@ -391,6 +421,11 @@ namespace Saber.GAS.Runtime
         /// 尝试执行一次能力激活请求。
         /// </summary>
         public AbilityActivationResult TryActivate(AbilityActivationRequest request)
+        {
+            return _activationService.TryActivate(this, request);
+        }
+
+        internal AbilityActivationResult TryActivateCore(AbilityActivationRequest request)
         {
             var attempt = BuildActivationAttempt(request);
             if (attempt.IsBlocked)
@@ -1297,6 +1332,11 @@ namespace Saber.GAS.Runtime
         /// </summary>
         private void ResolveAttemptImpacts(CombatActionAttempt attempt, AbilityExecutionRecord record)
         {
+            _impactService.ResolveAttemptImpacts(this, attempt, record);
+        }
+
+        internal void ResolveAttemptImpactsCore(CombatActionAttempt attempt, AbilityExecutionRecord record)
+        {
             // Mutators run before built-in resolution so rule systems can rewrite magnitudes,
             // add custom operations, or strip operations without patching runtime core logic.
             for (var impactIndex = 0; impactIndex < attempt.Impacts.Count; impactIndex++)
@@ -1339,12 +1379,12 @@ namespace Saber.GAS.Runtime
                 for (var operationIndex = 0; operationIndex < impact.Operations.Count; operationIndex++)
                 {
                     var operation = impact.Operations[operationIndex];
-                    if (TryResolveCustomImpact(attempt, impact, operation))
-                    {
-                        continue;
-                    }
-
-                    ResolveBuiltInImpact(attempt, impact, operation, record);
+                    _impactOperationHandlerRegistry.TryExecute(new CombatImpactOperationExecutionContext(
+                        this,
+                        attempt,
+                        impact,
+                        operation,
+                        record));
                 }
 
                 if (record != null)
@@ -1385,27 +1425,12 @@ namespace Saber.GAS.Runtime
         /// <summary>
         /// 尝试把自定义 ImpactOperation 交给外部 Resolver 处理。
         /// </summary>
-        private bool TryResolveCustomImpact(CombatActionAttempt attempt, CombatImpact impact, CombatImpactOperation operation)
-        {
-            for (var resolverIndex = 0; resolverIndex < _impactResolvers.Count; resolverIndex++)
-            {
-                var resolver = _impactResolvers[resolverIndex];
-                if (!resolver.CanResolve(operation))
-                {
-                    continue;
-                }
-
-                resolver.Resolve(attempt, impact, operation, this);
-                return true;
-            }
-
-            return false;
-        }
+        // Legacy custom resolver hook kept as compatibility path through handler adapters.
 
         /// <summary>
         /// 处理 Core 内建支持的 ImpactOperation。
         /// </summary>
-        private void ResolveBuiltInImpact(
+        internal void ResolveBuiltInImpact(
             CombatActionAttempt attempt,
             CombatImpact impact,
             CombatImpactOperation operation,
@@ -1416,7 +1441,7 @@ namespace Saber.GAS.Runtime
             switch (operation.Type)
             {
                 case CombatImpactOperationType.ResourceDelta:
-                    if (!WorldState.TryGetActor(impact.TargetActorId, out targetActor))
+                    if (!CombatRuntimeActorLocator.TryGetActor(WorldState, impact.TargetActorId, out targetActor))
                     {
                         return;
                     }
@@ -1486,7 +1511,7 @@ namespace Saber.GAS.Runtime
                     return;
 
                 case CombatImpactOperationType.ApplyEffect:
-                    if (!WorldState.TryGetActor(impact.TargetActorId, out targetActor))
+                    if (!CombatRuntimeActorLocator.TryGetActor(WorldState, impact.TargetActorId, out targetActor))
                     {
                         return;
                     }
@@ -1495,7 +1520,7 @@ namespace Saber.GAS.Runtime
                     return;
 
                 case CombatImpactOperationType.RemoveEffectsByTag:
-                    if (!WorldState.TryGetActor(impact.TargetActorId, out targetActor))
+                    if (!CombatRuntimeActorLocator.TryGetActor(WorldState, impact.TargetActorId, out targetActor))
                     {
                         return;
                     }
@@ -1504,7 +1529,7 @@ namespace Saber.GAS.Runtime
                     return;
 
                 case CombatImpactOperationType.RemoveEffectById:
-                    if (!WorldState.TryGetActor(impact.TargetActorId, out targetActor))
+                    if (!CombatRuntimeActorLocator.TryGetActor(WorldState, impact.TargetActorId, out targetActor))
                     {
                         return;
                     }
@@ -1773,6 +1798,11 @@ namespace Saber.GAS.Runtime
 
 
         private void ProcessEffects(CombatActorState actor)
+        {
+            _effectLifecycleService.ProcessEffects(this, actor);
+        }
+
+        internal void ProcessEffectsCore(CombatActorState actor)
         {
             for (var i = actor.ActiveEffects.Count - 1; i >= 0; i--)
             {
@@ -2459,26 +2489,62 @@ namespace Saber.GAS.Runtime
             FP currentResourceValue = default(FP),
             object customPayload = null)
         {
-            RaiseTriggerEvent(new CombatTriggerContext
-            {
-                CurrentTick = WorldState.CurrentTick,
-                EventKind = eventKind,
-                Timing = timing,
-                OwnerActorId = ownerActorId,
-                InstigatorActorId = instigatorActorId,
-                TargetActorId = targetActorId,
-                RelatedAbility = relatedAbility,
-                RelatedEffect = relatedEffect,
-                RelatedAttempt = relatedAttempt,
-                RelatedImpact = relatedImpact,
-                RelatedOperation = relatedOperation,
-                SourceActiveEffect = sourceActiveEffect,
-                SourceAbilityInstance = sourceAbilityInstance,
-                ResourceId = resourceId,
-                PreviousResourceValue = previousResourceValue,
-                CurrentResourceValue = currentResourceValue,
-                CustomPayload = customPayload,
-            });
+            _triggerBridgeService.ProcessOwnedTriggerEvent(
+                this,
+                eventKind,
+                timing,
+                ownerActorId,
+                instigatorActorId,
+                targetActorId,
+                relatedAbility,
+                relatedEffect,
+                relatedAttempt,
+                relatedImpact,
+                relatedOperation,
+                sourceActiveEffect,
+                sourceAbilityInstance,
+                resourceId,
+                previousResourceValue,
+                currentResourceValue,
+                customPayload);
+        }
+
+        internal void ProcessOwnedTriggerEventCore(
+            CombatTriggerEventKind eventKind,
+            CombatTriggerTiming timing,
+            ActorId ownerActorId,
+            ActorId instigatorActorId,
+            ActorId targetActorId,
+            AbilityDefinition relatedAbility,
+            EffectDefinition relatedEffect,
+            CombatActionAttempt relatedAttempt,
+            CombatImpact relatedImpact,
+            CombatImpactOperation relatedOperation,
+            ActiveEffect sourceActiveEffect,
+            ActiveAbilityInstance sourceAbilityInstance,
+            ResourceId resourceId = default(ResourceId),
+            FP previousResourceValue = default(FP),
+            FP currentResourceValue = default(FP),
+            object customPayload = null)
+        {
+            RaiseTriggerEvent(CombatTriggerContextFactory.Create(
+                WorldState.CurrentTick,
+                eventKind,
+                timing,
+                ownerActorId,
+                instigatorActorId,
+                targetActorId,
+                relatedAbility,
+                relatedEffect,
+                relatedAttempt,
+                relatedImpact,
+                relatedOperation,
+                sourceActiveEffect,
+                sourceAbilityInstance,
+                resourceId,
+                previousResourceValue,
+                currentResourceValue,
+                customPayload));
         }
 
         /// <summary>
@@ -3208,6 +3274,51 @@ namespace Saber.GAS.Runtime
         /// 收集 Runtime 启动时可见的自定义 TriggerAction 注册表。
         /// 这里会把全局自动注册表和本次 Runtime 额外注入的注册表合并去重。
         /// </summary>
+        private static IReadOnlyList<IImpactOperationHandler> CollectImpactOperationHandlers(
+            IList<IImpactOperationHandler> runtimeHandlers,
+            IReadOnlyList<ICombatImpactResolver> legacyResolvers)
+        {
+            var results = new List<IImpactOperationHandler>();
+            AppendImpactOperationHandlers(results, runtimeHandlers);
+            AppendImpactOperationHandlers(results, ImpactOperationHandlerCompatibility.WrapLegacyResolvers(legacyResolvers));
+            return results;
+        }
+
+        private static void AppendImpactOperationHandlers(
+            IList<IImpactOperationHandler> results,
+            IEnumerable<IImpactOperationHandler> handlers)
+        {
+            if (results == null || handlers == null)
+            {
+                return;
+            }
+
+            foreach (var handler in handlers)
+            {
+                if (handler == null || ContainsImpactOperationHandler(results, handler))
+                {
+                    continue;
+                }
+
+                results.Add(handler);
+            }
+        }
+
+        private static bool ContainsImpactOperationHandler(
+            IList<IImpactOperationHandler> results,
+            IImpactOperationHandler handler)
+        {
+            for (var i = 0; i < results.Count; i++)
+            {
+                if (ReferenceEquals(results[i], handler))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private static IReadOnlyList<ICombatCustomTriggerActionRegistry> CollectCustomTriggerActionRegistries(
             IList<ICombatCustomTriggerActionRegistry> runtimeRegistries)
         {

@@ -1,0 +1,46 @@
+﻿using System.Collections.Generic;
+using Saber.GAS.Triggers;
+
+namespace YourGame.GAS.Extensions
+{
+    public sealed class YourTriggerActionDescriptorRegistry : ICombatTriggerActionDescriptorRegistry
+    {
+        public const int YourCustomActionId = 2001;
+
+        private static readonly TriggerActionDescriptor[] DescriptorList =
+        {
+            new TriggerActionDescriptor(
+                TriggerActionKind.Custom,
+                ExecuteCustom,
+                TriggerActionInspectorField.SourceActor |
+                TriggerActionInspectorField.TargetActor |
+                TriggerActionInspectorField.CustomActionId,
+                TriggerActionGraphTargetKind.None,
+                Validate,
+                "Your Custom Trigger Action"),
+        };
+
+        public IReadOnlyList<TriggerActionDescriptor> Descriptors => DescriptorList;
+
+        private static void ExecuteCustom(CombatTriggerActionExecutionContext context)
+        {
+            // 这里写自定义动作执行逻辑。
+            // 建议：通过 context.Runtime + context.TriggerContext 读取状态，避免全局静态依赖。
+        }
+
+        private static string Validate(TriggerActionDefinition action)
+        {
+            if (action == null)
+            {
+                return "Action is null.";
+            }
+
+            if (action.CustomActionId <= 0)
+            {
+                return "CustomActionId must be > 0.";
+            }
+
+            return null;
+        }
+    }
+}

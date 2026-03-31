@@ -23,6 +23,7 @@ namespace Saber.GAS.Triggers
         /// 缓存所属 CombatRuntime。
         /// </summary>
         private readonly CombatRuntime _runtime;
+        private readonly CompositeCombatTriggerActionDescriptorRegistry _actionDescriptorRegistry;
         /// <summary>
         /// 记录当前递归执行深度。
         /// </summary>
@@ -34,6 +35,7 @@ namespace Saber.GAS.Triggers
         public CombatTriggerProcessor(CombatRuntime runtime)
         {
             _runtime = runtime;
+            _actionDescriptorRegistry = runtime == null ? null : runtime.TriggerActionDescriptorRegistry;
         }
 
         /// <summary>
@@ -653,55 +655,11 @@ namespace Saber.GAS.Triggers
                 return;
             }
 
-            switch (action.Kind)
-            {
-                case TriggerActionKind.ActivateAbility:
-                    ExecuteAbilityAction(context, candidate, action);
-                    break;
-                case TriggerActionKind.ApplyEffect:
-                    ExecuteApplyEffectAction(context, candidate, action);
-                    break;
-                case TriggerActionKind.RemoveEffectById:
-                    ExecuteRemoveEffectByIdAction(context, candidate, action);
-                    break;
-                case TriggerActionKind.RemoveEffectsByTag:
-                case TriggerActionKind.CleanseByTag:
-                    ExecuteRemoveEffectsByTagAction(context, candidate, action);
-                    break;
-                case TriggerActionKind.AddImpactOperation:
-                    ExecuteAddImpactOperationAction(context, action);
-                    break;
-                case TriggerActionKind.ModifyImpactMagnitude:
-                    ExecuteModifyImpactMagnitudeAction(context, action);
-                    break;
-                case TriggerActionKind.AddResource:
-                    ExecuteModifyResourceAction(context, candidate, action, false);
-                    break;
-                case TriggerActionKind.RemoveResource:
-                    ExecuteModifyResourceAction(context, candidate, action, true);
-                    break;
-                case TriggerActionKind.AddTag:
-                    ExecuteModifyTagAction(context, candidate, action, true);
-                    break;
-                case TriggerActionKind.RemoveTag:
-                    ExecuteModifyTagAction(context, candidate, action, false);
-                    break;
-                case TriggerActionKind.CancelAbility:
-                    ExecuteCancelAbilityAction(context, candidate, action);
-                    break;
-                case TriggerActionKind.EmitCue:
-                    ExecuteEmitCueAction(context, candidate, action);
-                    break;
-                case TriggerActionKind.SplitImpactToActor:
-                    ExecuteSplitImpactAction(context, candidate, action);
-                    break;
-                case TriggerActionKind.AddResourceFromImpact:
-                    ExecuteAddResourceFromImpactAction(context, candidate, action);
-                    break;
-                case TriggerActionKind.Custom:
-                    ExecuteCustomAction(context, candidate, action);
-                    break;
-            }
+            _actionDescriptorRegistry?.TryExecute(new CombatTriggerActionExecutionContext(
+                _runtime,
+                context,
+                candidate,
+                action));
 
             if (definition.RemoveSourceEffectOnTrigger && candidate.SourceEffect != null && candidate.OwnerActor != null)
             {

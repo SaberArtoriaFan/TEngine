@@ -83,14 +83,30 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _modules:
   - rid: 1762773924573085703
+  - rid: 1762773943797940230
   references:
     version: 2
     RefIds:
     - rid: 1762773924573085703
       type: {class: TriggerIdentityModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
       data:
-        _triggerId: 
+        _triggerId: trigger.trigger-battlefocuspulse
         _displayName: 
+    - rid: 1762773943797940230
+      type: {class: TriggerTagFilterModule, ns: Saber.GAS.Authoring, asm: Saber.GAS.Authoring}
+      data:
+        _requiredOwnerTags: []
+        _blockedOwnerTags: []
+        _requiredInstigatorTags: []
+        _blockedInstigatorTags: []
+        _requiredTargetTags: []
+        _blockedTargetTags: []
+        _requiredIncomingAbilityTags: []
+        _blockedIncomingAbilityTags: []
+        _requiredIncomingEffectTags: []
+        _blockedIncomingEffectTags: []
+        _requiredImpactTags: []
+        _blockedImpactTags: []
 --- !u!114 &-90148074152765314
 MonoBehaviour:
   m_ObjectHideFlags: 0

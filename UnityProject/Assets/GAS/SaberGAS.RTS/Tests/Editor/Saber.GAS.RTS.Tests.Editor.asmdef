@@ -1,0 +1,23 @@
+{
+    "name": "Saber.GAS.RTS.Tests.Editor",
+    "rootNamespace": "Saber.GAS.RTS.Tests",
+    "references": [
+        "Saber.GAS.RTS",
+        "Saber.GAS",
+        "FixedPoint"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true,
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ]
+}

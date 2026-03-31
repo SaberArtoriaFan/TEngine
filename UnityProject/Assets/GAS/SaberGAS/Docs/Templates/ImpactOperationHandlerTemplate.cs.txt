@@ -1,0 +1,51 @@
+﻿using System;
+using System.Collections.Generic;
+using Herta;
+using Saber.GAS.Foundation;
+using Saber.GAS.Runtime;
+
+namespace YourGame.GAS.Extensions
+{
+    public sealed class YourImpactPayload
+    {
+        public ResourceId ResourceId { get; set; } = ResourceId.Empty;
+
+        public FP Ratio { get; set; } = FP._0;
+    }
+
+    public sealed class YourImpactOperationHandler : IImpactOperationHandler
+    {
+        public const string CueName = "your.operation.cue";
+
+        public bool CanHandle(CombatImpactOperation operation)
+        {
+            return operation != null &&
+                   operation.Type == CombatImpactOperationType.Cue &&
+                   string.Equals(operation.CueName, CueName, StringComparison.Ordinal) &&
+                   operation.Payload is YourImpactPayload;
+        }
+
+        public bool Execute(CombatImpactOperationExecutionContext context)
+        {
+            var payload = context.Operation?.Payload as YourImpactPayload;
+            if (payload == null)
+            {
+                return false;
+            }
+
+            // 在这里实现你的 operation 逻辑。
+            // 返回 true 代表“已处理”。
+            return true;
+        }
+    }
+
+    public sealed class YourImpactOperationHandlerRegistry : IImpactOperationHandlerRegistry
+    {
+        private static readonly IImpactOperationHandler[] HandlerList =
+        {
+            new YourImpactOperationHandler(),
+        };
+
+        public IReadOnlyList<IImpactOperationHandler> Handlers => HandlerList;
+    }
+}

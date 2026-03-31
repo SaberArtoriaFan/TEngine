@@ -133,12 +133,12 @@ namespace Saber.GAS.Authoring
 
         public bool AddRemovedEffect(EffectDefinitionAsset effect)
         {
-            return AppendUnique(ref _removedTargetEffects, effect);
+            return CombatAuthoringArrayUtility.AppendUnique(ref _removedTargetEffects, effect);
         }
 
         public bool RemoveRemovedEffect(EffectDefinitionAsset effect)
         {
-            return RemoveReference(ref _removedTargetEffects, effect);
+            return CombatAuthoringArrayUtility.RemoveReference(ref _removedTargetEffects, effect);
         }
 
         public override void ApplyTo(
@@ -167,58 +167,6 @@ namespace Saber.GAS.Authoring
             }
         }
 
-        private static bool AppendUnique(ref EffectDefinitionAsset[] values, EffectDefinitionAsset effect)
-        {
-            if (effect == null)
-            {
-                return false;
-            }
-
-            if (values == null)
-            {
-                values = Array.Empty<EffectDefinitionAsset>();
-            }
-
-            for (var i = 0; i < values.Length; i++)
-            {
-                if (values[i] == effect)
-                {
-                    return false;
-                }
-            }
-
-            Array.Resize(ref values, values.Length + 1);
-            values[^1] = effect;
-            return true;
-        }
-
-        private static bool RemoveReference(ref EffectDefinitionAsset[] values, EffectDefinitionAsset effect)
-        {
-            if (values == null || values.Length == 0)
-            {
-                return false;
-            }
-
-            var index = Array.IndexOf(values, effect);
-            if (index < 0)
-            {
-                return false;
-            }
-
-            var next = new EffectDefinitionAsset[values.Length - 1];
-            if (index > 0)
-            {
-                Array.Copy(values, 0, next, 0, index);
-            }
-
-            if (index < values.Length - 1)
-            {
-                Array.Copy(values, index + 1, next, index, values.Length - index - 1);
-            }
-
-            values = next;
-            return true;
-        }
     }
 
     [Serializable, GasAuthoringModule("属性修正", 40)]
@@ -465,12 +413,12 @@ namespace Saber.GAS.Authoring
 
         public bool AddTrigger(TriggerDefinitionAsset trigger)
         {
-            return AppendUnique(ref _triggers, trigger);
+            return CombatAuthoringArrayUtility.AppendUnique(ref _triggers, trigger);
         }
 
         public bool RemoveTrigger(TriggerDefinitionAsset trigger)
         {
-            return RemoveReference(ref _triggers, trigger);
+            return CombatAuthoringArrayUtility.RemoveReference(ref _triggers, trigger);
         }
 
         public override void ApplyTo(
@@ -493,57 +441,5 @@ namespace Saber.GAS.Authoring
             }
         }
 
-        private static bool AppendUnique(ref TriggerDefinitionAsset[] values, TriggerDefinitionAsset trigger)
-        {
-            if (trigger == null)
-            {
-                return false;
-            }
-
-            if (values == null)
-            {
-                values = Array.Empty<TriggerDefinitionAsset>();
-            }
-
-            for (var i = 0; i < values.Length; i++)
-            {
-                if (values[i] == trigger)
-                {
-                    return false;
-                }
-            }
-
-            Array.Resize(ref values, values.Length + 1);
-            values[^1] = trigger;
-            return true;
-        }
-
-        private static bool RemoveReference(ref TriggerDefinitionAsset[] values, TriggerDefinitionAsset trigger)
-        {
-            if (values == null || values.Length == 0)
-            {
-                return false;
-            }
-
-            var index = Array.IndexOf(values, trigger);
-            if (index < 0)
-            {
-                return false;
-            }
-
-            var next = new TriggerDefinitionAsset[values.Length - 1];
-            if (index > 0)
-            {
-                Array.Copy(values, 0, next, 0, index);
-            }
-
-            if (index < values.Length - 1)
-            {
-                Array.Copy(values, index + 1, next, index, values.Length - index - 1);
-            }
-
-            values = next;
-            return true;
-        }
     }
 }

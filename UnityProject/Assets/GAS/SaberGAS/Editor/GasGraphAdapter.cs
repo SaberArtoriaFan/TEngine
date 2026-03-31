@@ -137,18 +137,7 @@ namespace Saber.GAS.Editor
                     continue;
                 }
 
-                switch (actionModule.Kind)
-                {
-                    case TriggerActionKind.ApplyEffect:
-                        AddSingleRelation(results, triggers[i], GasGraphRelationKind.TriggerApplyEffect, actionModule.EffectAsset);
-                        break;
-                    case TriggerActionKind.ActivateAbility:
-                        AddSingleRelation(results, triggers[i], GasGraphRelationKind.TriggerActivateAbility, actionModule.TriggeredAbility);
-                        break;
-                    case TriggerActionKind.CancelAbility:
-                        AddSingleRelation(results, triggers[i], GasGraphRelationKind.TriggerCancelAbility, actionModule.AbilityToCancel);
-                        break;
-                }
+                AddTriggerActionGraphRelation(results, triggers[i], actionModule);
             }
 
             return results;
@@ -494,6 +483,70 @@ namespace Saber.GAS.Editor
             if (target != null)
             {
                 results.Add(new GasGraphRelation(source, kind, target));
+            }
+        }
+
+        private static void AddTriggerActionGraphRelation(
+            ICollection<GasGraphRelation> results,
+            TriggerDefinitionAsset triggerAsset,
+            TriggerActionModule actionModule)
+        {
+            if (results == null || triggerAsset == null || actionModule == null)
+            {
+                return;
+            }
+
+            if (!CombatTriggerActionDescriptorRegistryHub.TryGetDescriptor(actionModule.Kind, out var descriptor))
+            {
+                return;
+            }
+
+            if (!TryMapGraphTargetToRelationKind(descriptor.GraphTargetKind, out var relationKind))
+            {
+                return;
+            }
+
+            switch (descriptor.GraphTargetKind)
+            {
+                case TriggerActionGraphTargetKind.TriggeredAbility:
+                    if (actionModule.TriggeredAbility != null)
+                    {
+                        results.Add(new GasGraphRelation(triggerAsset, relationKind, actionModule.TriggeredAbility));
+                    }
+                    break;
+                case TriggerActionGraphTargetKind.EffectAsset:
+                    if (actionModule.EffectAsset != null)
+                    {
+                        results.Add(new GasGraphRelation(triggerAsset, relationKind, actionModule.EffectAsset));
+                    }
+                    break;
+                case TriggerActionGraphTargetKind.AbilityToCancel:
+                    if (actionModule.AbilityToCancel != null)
+                    {
+                        results.Add(new GasGraphRelation(triggerAsset, relationKind, actionModule.AbilityToCancel));
+                    }
+                    break;
+            }
+        }
+
+        private static bool TryMapGraphTargetToRelationKind(
+            TriggerActionGraphTargetKind graphTargetKind,
+            out GasGraphRelationKind relationKind)
+        {
+            switch (graphTargetKind)
+            {
+                case TriggerActionGraphTargetKind.TriggeredAbility:
+                    relationKind = GasGraphRelationKind.TriggerActivateAbility;
+                    return true;
+                case TriggerActionGraphTargetKind.EffectAsset:
+                    relationKind = GasGraphRelationKind.TriggerApplyEffect;
+                    return true;
+                case TriggerActionGraphTargetKind.AbilityToCancel:
+                    relationKind = GasGraphRelationKind.TriggerCancelAbility;
+                    return true;
+                default:
+                    relationKind = GasGraphRelationKind.None;
+                    return false;
             }
         }
 

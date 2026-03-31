@@ -329,9 +329,9 @@ namespace Saber.GAS.Authoring
 
             return slot switch
             {
-                AbilityEffectModuleSlot.Execute => AppendUnique(ref _effects, effect),
-                AbilityEffectModuleSlot.Periodic => AppendUnique(ref _periodicEffects, effect),
-                AbilityEffectModuleSlot.End => AppendUnique(ref _endEffects, effect),
+                AbilityEffectModuleSlot.Execute => CombatAuthoringArrayUtility.AppendUnique(ref _effects, effect),
+                AbilityEffectModuleSlot.Periodic => CombatAuthoringArrayUtility.AppendUnique(ref _periodicEffects, effect),
+                AbilityEffectModuleSlot.End => CombatAuthoringArrayUtility.AppendUnique(ref _endEffects, effect),
                 _ => false,
             };
         }
@@ -345,9 +345,9 @@ namespace Saber.GAS.Authoring
 
             return slot switch
             {
-                AbilityEffectModuleSlot.Execute => RemoveReference(ref _effects, effect),
-                AbilityEffectModuleSlot.Periodic => RemoveReference(ref _periodicEffects, effect),
-                AbilityEffectModuleSlot.End => RemoveReference(ref _endEffects, effect),
+                AbilityEffectModuleSlot.Execute => CombatAuthoringArrayUtility.RemoveReference(ref _effects, effect),
+                AbilityEffectModuleSlot.Periodic => CombatAuthoringArrayUtility.RemoveReference(ref _periodicEffects, effect),
+                AbilityEffectModuleSlot.End => CombatAuthoringArrayUtility.RemoveReference(ref _endEffects, effect),
                 _ => false,
             };
         }
@@ -387,53 +387,6 @@ namespace Saber.GAS.Authoring
             }
         }
 
-        private static bool AppendUnique(ref EffectDefinitionAsset[] values, EffectDefinitionAsset effect)
-        {
-            if (values == null)
-            {
-                values = Array.Empty<EffectDefinitionAsset>();
-            }
-
-            for (var i = 0; i < values.Length; i++)
-            {
-                if (values[i] == effect)
-                {
-                    return false;
-                }
-            }
-
-            Array.Resize(ref values, values.Length + 1);
-            values[^1] = effect;
-            return true;
-        }
-
-        private static bool RemoveReference(ref EffectDefinitionAsset[] values, EffectDefinitionAsset effect)
-        {
-            if (values == null || values.Length == 0)
-            {
-                return false;
-            }
-
-            var index = Array.IndexOf(values, effect);
-            if (index < 0)
-            {
-                return false;
-            }
-
-            var next = new EffectDefinitionAsset[values.Length - 1];
-            if (index > 0)
-            {
-                Array.Copy(values, 0, next, 0, index);
-            }
-
-            if (index < values.Length - 1)
-            {
-                Array.Copy(values, index + 1, next, index, values.Length - index - 1);
-            }
-
-            values = next;
-            return true;
-        }
     }
 
     [Serializable, GasAuthoringModule("触发器载荷", 70)]
@@ -452,12 +405,12 @@ namespace Saber.GAS.Authoring
 
         public bool AddTrigger(TriggerDefinitionAsset trigger)
         {
-            return AppendUnique(ref _triggers, trigger);
+            return CombatAuthoringArrayUtility.AppendUnique(ref _triggers, trigger);
         }
 
         public bool RemoveTrigger(TriggerDefinitionAsset trigger)
         {
-            return RemoveReference(ref _triggers, trigger);
+            return CombatAuthoringArrayUtility.RemoveReference(ref _triggers, trigger);
         }
 
         public override void ApplyTo(
@@ -480,57 +433,5 @@ namespace Saber.GAS.Authoring
             }
         }
 
-        private static bool AppendUnique(ref TriggerDefinitionAsset[] values, TriggerDefinitionAsset trigger)
-        {
-            if (trigger == null)
-            {
-                return false;
-            }
-
-            if (values == null)
-            {
-                values = Array.Empty<TriggerDefinitionAsset>();
-            }
-
-            for (var i = 0; i < values.Length; i++)
-            {
-                if (values[i] == trigger)
-                {
-                    return false;
-                }
-            }
-
-            Array.Resize(ref values, values.Length + 1);
-            values[^1] = trigger;
-            return true;
-        }
-
-        private static bool RemoveReference(ref TriggerDefinitionAsset[] values, TriggerDefinitionAsset trigger)
-        {
-            if (values == null || values.Length == 0)
-            {
-                return false;
-            }
-
-            var index = Array.IndexOf(values, trigger);
-            if (index < 0)
-            {
-                return false;
-            }
-
-            var next = new TriggerDefinitionAsset[values.Length - 1];
-            if (index > 0)
-            {
-                Array.Copy(values, 0, next, 0, index);
-            }
-
-            if (index < values.Length - 1)
-            {
-                Array.Copy(values, index + 1, next, index, values.Length - index - 1);
-            }
-
-            values = next;
-            return true;
-        }
     }
 }

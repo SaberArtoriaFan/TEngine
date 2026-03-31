@@ -6,6 +6,7 @@ namespace Saber.GAS.RTS.Relations
     /// <summary>
     /// RTS 默认的 Team 阵营关系解析器。
     /// 它把 TeamId 相同解释为 Ally，不同解释为 Enemy，空 TeamId 解释为 Neutral。
+    /// 返回值只使用 Self/Ally/Enemy/Neutral 四种基础关系位，避免别名位带来的误匹配。
     /// </summary>
     public sealed class RtsTeamRelationResolver : ICombatActorRelationResolver
     {
@@ -32,15 +33,15 @@ namespace Saber.GAS.RTS.Relations
             if (TreatEmptyTeamAsNeutral &&
                 (sourceActor.TeamId.IsEmpty || targetActor.TeamId.IsEmpty))
             {
-                return CombatActorRelationFlags.Neutral | CombatActorRelationFlags.Other;
+                return CombatActorRelationFlags.Neutral;
             }
 
             if (sourceActor.TeamId == targetActor.TeamId)
             {
-                return CombatActorRelationFlags.Ally | CombatActorRelationFlags.Other;
+                return CombatActorRelationFlags.Ally;
             }
 
-            return CombatActorRelationFlags.Enemy | CombatActorRelationFlags.Other;
+            return CombatActorRelationFlags.Enemy;
         }
     }
 }

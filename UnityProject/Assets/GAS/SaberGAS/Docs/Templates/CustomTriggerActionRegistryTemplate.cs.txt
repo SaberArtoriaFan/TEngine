@@ -1,0 +1,38 @@
+﻿using System.Collections.Generic;
+using Saber.GAS.Triggers;
+
+namespace YourGame.GAS.Extensions
+{
+    public sealed class YourCustomTriggerAction : ICombatCustomTriggerAction
+    {
+        public const int ActionId = 3001;
+
+        public int CustomId => ActionId;
+
+        public void ExecuteAction(CombatCustomTriggerActionExecutionContext context)
+        {
+            // 这里实现你的自定义 Trigger 行为。
+            // 可使用 context.TriggerContext / context.OwnerActor / context.WorldState。
+        }
+    }
+
+    public sealed class YourCustomTriggerActionRegistry : ICombatCustomTriggerActionRegistry
+    {
+        private static readonly int[] ActionIds = { YourCustomTriggerAction.ActionId };
+        private readonly ICombatCustomTriggerAction _action = new YourCustomTriggerAction();
+
+        public IReadOnlyList<int> RegisteredCustomActionIds => ActionIds;
+
+        public bool TryResolve(int customActionId, out ICombatCustomTriggerAction action)
+        {
+            if (customActionId == YourCustomTriggerAction.ActionId)
+            {
+                action = _action;
+                return true;
+            }
+
+            action = null;
+            return false;
+        }
+    }
+}

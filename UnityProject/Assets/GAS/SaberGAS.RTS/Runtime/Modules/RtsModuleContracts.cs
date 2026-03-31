@@ -17,6 +17,18 @@ namespace Saber.GAS.RTS.Modules
         /// 查询指定范围内的单位，并写入结果缓冲。
         /// </summary>
         void QueryActorsInRange(CombatWorldState worldState, WorldPosition center, FP radius, IList<CombatActorState> results);
+
+        /// <summary>
+        /// 查询离指定点最近的单位。
+        /// 当 maxDistance 小于等于 0 时表示不限制最大距离。
+        /// </summary>
+        bool TryFindNearestActor(CombatWorldState worldState, WorldPosition center, FP maxDistance, out CombatActorState nearestActor);
+
+        /// <summary>
+        /// 查询离指定施法者最近的其他单位（不返回自己）。
+        /// 当 maxDistance 小于等于 0 时表示不限制最大距离。
+        /// </summary>
+        bool TryFindNearestActor(CombatWorldState worldState, CombatActorState sourceActor, FP maxDistance, out CombatActorState nearestActor);
     }
 
     /// <summary>

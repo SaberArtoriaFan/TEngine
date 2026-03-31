@@ -1,7 +1,11 @@
 using System;
 using Saber.GAS.Runtime;
+using Saber.GAS.RTS.CustomActions;
 using Saber.GAS.RTS.Modules;
+using Saber.GAS.RTS.Operations;
 using Saber.GAS.RTS.Relations;
+using Saber.GAS.RTS.Spatial;
+using Saber.GAS.Triggers;
 
 namespace Saber.GAS.RTS.Bootstrap
 {
@@ -18,7 +22,9 @@ namespace Saber.GAS.RTS.Bootstrap
         {
             RelationResolver = new RtsTeamRelationResolver();
             ModeRules = new DefaultCombatModeRules();
-            TargetingResolver = new DefaultTargetingResolver();
+            SpatialQueryService = new RtsOctreeSpatialQueryService();
+            ReflectDamageCustomTriggerActionRegistry = new RtsReflectDamageCustomTriggerActionRegistry();
+            LifeStealImpactOperationHandler = new RtsLifeStealImpactOperationHandler();
         }
 
         /// <summary>
@@ -50,6 +56,17 @@ namespace Saber.GAS.RTS.Bootstrap
         /// 获取或设置 RTS 指令校验服务。
         /// </summary>
         public IRtsOrderRuleService OrderRuleService { get; set; }
+
+        /// <summary>
+        /// 获取或设置“受伤反给最远敌人”动作的回退注册表。
+        /// 当源码生成注册表不可用时，会自动注入该注册表以保证动作可执行。
+        /// </summary>
+        public ICombatCustomTriggerActionRegistry ReflectDamageCustomTriggerActionRegistry { get; set; }
+
+        /// <summary>
+        /// 获取或设置 RTS 示例吸血 Operation 的处理器。
+        /// </summary>
+        public IImpactOperationHandler LifeStealImpactOperationHandler { get; set; }
 
         /// <summary>
         /// 创建一份已经套用 RTS 默认装配的 RuntimeOptions。
@@ -84,8 +101,97 @@ namespace Saber.GAS.RTS.Bootstrap
 
             if (options.TargetingResolver == null)
             {
-                options.TargetingResolver = TargetingResolver;
+                options.TargetingResolver = TargetingResolver ?? CreateDefaultTargetingResolver(options.RelationResolver);
             }
+
+            InjectReflectDamageCustomActionRegistry(options);
+            InjectImpactOperationHandler(options);
+        }
+
+        private ITargetingResolver CreateDefaultTargetingResolver(ICombatActorRelationResolver relationResolver)
+        {
+            if (SpatialQueryService == null)
+            {
+                return new DefaultTargetingResolver();
+            }
+
+            return new RtsSpatialTargetingResolver(
+                SpatialQueryService,
+                relationResolver ?? new RtsTeamRelationResolver(),
+                new DefaultTargetingResolver());
+        }
+
+        private void InjectReflectDamageCustomActionRegistry(CombatRuntimeOptions options)
+        {
+            if (ReflectDamageCustomTriggerActionRegistry == null)
+            {
+                return;
+            }
+
+            if (HasCustomActionId(options.CustomTriggerActionRegistries, RtsReflectDamageToFarthestEnemyTriggerAction.ActionId))
+            {
+                return;
+            }
+
+            if (HasCustomActionId(CombatCustomTriggerActionRegistryHub.Snapshot(), RtsReflectDamageToFarthestEnemyTriggerAction.ActionId))
+            {
+                return;
+            }
+
+            options.CustomTriggerActionRegistries.Add(ReflectDamageCustomTriggerActionRegistry);
+        }
+
+        private static bool HasCustomActionId(
+            System.Collections.Generic.IEnumerable<ICombatCustomTriggerActionRegistry> registries,
+            int customActionId)
+        {
+            if (registries == null || customActionId <= 0)
+            {
+                return false;
+            }
+
+            foreach (var registry in registries)
+            {
+                if (registry == null || registry.RegisteredCustomActionIds == null)
+                {
+                    continue;
+                }
+
+                for (var i = 0; i < registry.RegisteredCustomActionIds.Count; i++)
+                {
+                    if (registry.RegisteredCustomActionIds[i] == customActionId)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private void InjectImpactOperationHandler(CombatRuntimeOptions options)
+        {
+            if (options == null || LifeStealImpactOperationHandler == null)
+            {
+                return;
+            }
+
+            for (var i = 0; i < options.ImpactOperationHandlers.Count; i++)
+            {
+                var existing = options.ImpactOperationHandlers[i];
+                if (existing == null)
+                {
+                    continue;
+                }
+
+                if (ReferenceEquals(existing, LifeStealImpactOperationHandler) ||
+                    existing.GetType() == LifeStealImpactOperationHandler.GetType())
+                {
+                    return;
+                }
+            }
+
+            options.ImpactOperationHandlers.Add(LifeStealImpactOperationHandler);
         }
     }
 }
