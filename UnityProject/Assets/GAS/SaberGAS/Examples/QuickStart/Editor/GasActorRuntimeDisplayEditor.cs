@@ -150,6 +150,7 @@ namespace Saber.GAS.Examples.QuickStart.Editor
                 "Ability",
                 "Effect",
                 "Trigger",
+                "ResourceSet",
             };
 
             var selected = GUILayout.Toolbar((int)view.Section, labels);
